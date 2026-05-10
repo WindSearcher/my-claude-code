@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.windsearcher.domain.ChatMessage;
 import com.windsearcher.domain.ChatRequest;
+import com.windsearcher.domain.Role;
+import com.windsearcher.domain.ToolCall;
 import com.windsearcher.exception.LlmApiException;
 import com.windsearcher.llm.LlmProvider;
 import lombok.extern.slf4j.Slf4j;
@@ -91,12 +94,12 @@ public class OpenAiProvider implements LlmProvider {
 
     @Override
     public String getProviderName() {
-        return "openai";
+        return providerName;
     }
 
     @Override
     public List<String> getSupportedModels() {
-        return List.of();
+        return supportedModels;
     }
 
     @Override
@@ -136,120 +139,8 @@ public class OpenAiProvider implements LlmProvider {
         root.put("stream", chatRequest.isStream());
 
         // 2. 转换消息列表 — Anthropic 内部格式 → OpenAI Chat Completions 格式
-        for (Map<String, Object> msg : chatRequest.getMessages()) {
-            String role = (String) msg.get("role");
-            Object content = msg.get("content");
-
-            if (content instanceof List<?> blocks) {
-                // 检查是否包含 tool_result 块 → 转为 role:"tool" 消息
-                boolean hasToolResult = blocks.stream().anyMatch(b ->
-                        b instanceof Map<?,?> m && "tool_result".equals(m.get("type")));
-                if (hasToolResult) {
-                    for (Object block : blocks) {
-                        if (block instanceof Map<?,?> b && "tool_result".equals(b.get("type"))) {
-                            ObjectNode toolMsg = messagesArray.addObject();
-                            toolMsg.put("role", "tool");
-                            toolMsg.put("tool_call_id", (String) b.get("tool_use_id"));
-                            Object resultContent = b.get("content");
-                            toolMsg.put("content", resultContent != null ? resultContent.toString() : "");
-                        }
-                    }
-                    continue;
-                }
-
-                // 检查 assistant 消息是否包含 tool_use 块 → 转为 tool_calls 数组
-                boolean hasToolUse = blocks.stream().anyMatch(b ->
-                        b instanceof Map<?,?> m && "tool_use".equals(m.get("type")));
-                if ("assistant".equals(role) && hasToolUse) {
-                    ObjectNode msgNode = messagesArray.addObject();
-                    msgNode.put("role", "assistant");
-                    // 提取文本内容
-                    StringBuilder textContent = new StringBuilder();
-                    StringBuilder thinkingContent = new StringBuilder();
-                    for (Object block : blocks) {
-                        if (block instanceof Map<?,?> b) {
-                            if ("text".equals(b.get("type"))) {
-                                Object text = b.get("text");
-                                if (text != null && !text.toString().isEmpty()) {
-                                    if (!textContent.isEmpty()) textContent.append("\n");
-                                    textContent.append(text);
-                                }
-                            } else if ("thinking".equals(b.get("type"))) {
-                                Object thinking = b.get("thinking");
-                                if (thinking != null && !thinking.toString().isEmpty()) {
-                                    thinkingContent.append(thinking);
-                                }
-                            }
-                        }
-                    }
-                    if (!textContent.isEmpty()) {
-                        msgNode.put("content", textContent.toString());
-                    } else {
-                        msgNode.putNull("content");
-                    }
-                    // DeepSeek: reasoning_content 必须回传
-                    if (!thinkingContent.isEmpty()) {
-                        msgNode.put("reasoning_content", thinkingContent.toString());
-                    }
-                    // 构建 tool_calls 数组
-                    ArrayNode toolCalls = msgNode.putArray("tool_calls");
-                    for (Object block : blocks) {
-                        if (block instanceof Map<?,?> b && "tool_use".equals(b.get("type"))) {
-                            ObjectNode tc = toolCalls.addObject();
-                            tc.put("id", (String) b.get("id"));
-                            tc.put("type", "function");
-                            ObjectNode fn = tc.putObject("function");
-                            fn.put("name", (String) b.get("name"));
-                            Object input = b.get("input");
-                            try {
-                                fn.put("arguments", input != null
-                                        ? objectMapper.writeValueAsString(input) : "{}");
-                            } catch (Exception e) {
-                                fn.put("arguments", "{}");
-                            }
-                        }
-                    }
-                    continue;
-                }
-
-                // 普通 assistant/user 消息: 提取文本内容为字符串
-                StringBuilder textContent = new StringBuilder();
-                StringBuilder thinkingContent = new StringBuilder();
-                for (Object block : blocks) {
-                    if (block instanceof Map<?,?> b) {
-                        if ("text".equals(b.get("type"))) {
-                            Object text = b.get("text");
-                            if (text != null && !text.toString().isEmpty()) {
-                                if (!textContent.isEmpty()) textContent.append("\n");
-                                textContent.append(text);
-                            }
-                        } else if ("thinking".equals(b.get("type")) && "assistant".equals(role)) {
-                            Object thinking = b.get("thinking");
-                            if (thinking != null && !thinking.toString().isEmpty()) {
-                                thinkingContent.append(thinking);
-                            }
-                        }
-                    }
-                }
-                ObjectNode msgNode = messagesArray.addObject();
-                msgNode.put("role", role != null ? role : "user");
-                msgNode.put("content", textContent.toString());
-                // DeepSeek: reasoning_content 必须回传
-                if ("assistant".equals(role) && !thinkingContent.isEmpty()) {
-                    msgNode.put("reasoning_content", thinkingContent.toString());
-                }
-            } else {
-                // 纯字符串消息
-                ObjectNode msgNode = messagesArray.addObject();
-                msgNode.put("role", role != null ? role : "user");
-                if (content instanceof String s) {
-                    msgNode.put("content", s);
-                } else {
-                    msgNode.put("content", content != null ? content.toString() : "");
-                }
-            }
-        }
-
+        ArrayNode messages = buildOpenAiMessage(chatRequest.getMessages());
+        root.set("messages", messages);
 
 
         // 3. 工具定义
@@ -263,6 +154,56 @@ public class OpenAiProvider implements LlmProvider {
         return root;
     }
 
+    private ArrayNode buildOpenAiMessage(List<ChatMessage> chatMessages) {
+        ArrayNode messages = objectMapper.createArrayNode();
+        for (ChatMessage chatMessage : chatMessages) {
+            ObjectNode node = objectMapper.createObjectNode();
+            node.put("role", chatMessage.getRole().getDesc());
+            node.put("content", chatMessage.getContent());
+            // tool result message
+//            if (chatMessage.getRole() == Role.TOOL) {
+//                if (chatMessage.getToolCallId() != null) {
+//                    node.put("tool_call_id", chatMessage.getToolCallId());
+//                }
+//                if (chatMessage.getToolName() != null) {
+//
+//                }
+//            }
+
+            // assistant含工具调用
+            boolean hasToolCall = chatMessage.getToolCalls() != null
+                    && !chatMessage.getToolCalls().isEmpty();
+
+            if (chatMessage.getRole() == Role.ASSISTANT && hasToolCall) {
+                ArrayNode arr = objectMapper.createArrayNode();
+                for (ToolCall toolCall : chatMessage.getToolCalls()) {
+                    ObjectNode tcn = objectMapper.createObjectNode();
+                    tcn.put("id", toolCall.getId());
+                    tcn.put("type", "function");
+                    ObjectNode fn = objectMapper.createObjectNode();
+
+                    fn.put("name", toolCall.getName());
+                    String arguments;
+                    if (toolCall.getArgumentsRaw() != null) {
+                        arguments = toolCall.getArgumentsRaw();
+                    } else if (toolCall.getArguments() != null) {
+                        arguments = toolCall.getArguments().toString();
+                    } else {
+                        arguments = "{}";
+                    }
+                    fn.put("arguments", arguments);
+                    tcn.set("function", tcn);
+                    arr.add(tcn);
+                }
+
+                node.set("tool_calls", arr);
+            }
+
+            messages.add(node);
+        }
+
+        return messages;
+    }
 
 
     @Override
@@ -293,45 +234,28 @@ public class OpenAiProvider implements LlmProvider {
                 .post(RequestBody.create(requestBody.toString(), JSON_MEDIA))
                 .build();
 
-        // 4. 执行请求（429 时一次指数退避重试）
-        // 429-表示模型限流；
-        for (int attempt = 0; attempt < 2; attempt++) {
-            try (Response response = syncClient.newCall(request).execute()) {
-                if (response.code() == 429 && attempt == 0) {
-                    long waitMs = 1000;
-                    String retryAfter = response.header("Retry-After");
-                    if (retryAfter != null) {
-                        try { waitMs = Long.parseLong(retryAfter) * 1000; }
-                        catch (NumberFormatException ignored) {}
-                    }
-                    log.warn("chatSync 429 rate limited, retrying after {}ms", Math.min(waitMs, 5000));
-                    Thread.sleep(Math.min(waitMs, 5000));
-                    continue;
-                }
+        try (Response response = syncClient.newCall(request).execute()) {
 
-                if (!response.isSuccessful()) {
-                    throw new LlmApiException(
-                            "chatSync HTTP " + response.code(),
-                            response.code() >= 500, response.code());
-                }
-
-                ResponseBody body = response.body();
-                if (body == null) {
-                    throw new LlmApiException("Empty chatSync response", true);
-                }
-
-                JsonNode root = objectMapper.readTree(body.string());
-
-
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new LlmApiException("chatSync interrupted", false);
-            } catch (LlmApiException e) {
-                throw e;
-            } catch (IOException e) {
-                throw new LlmApiException("chatSync IO error: " + e.getMessage(), true);
+            if (!response.isSuccessful()) {
+                throw new LlmApiException(
+                        "chatSync HTTP " + response.code(),
+                        response.code() >= 500, response.code());
             }
+
+            ResponseBody body = response.body();
+            if (body == null) {
+                throw new LlmApiException("Empty chatSync response", true);
+            }
+
+            JsonNode root = objectMapper.readTree(body.string());
+
+            // TODO.帮我将返回结果写入到ChatResponse中
+
+        } catch (LlmApiException e) {
+            throw e;
+        } catch (IOException e) {
+            throw new LlmApiException("chatSync IO error: " + e.getMessage(), true);
         }
-        throw new LlmApiException("chatSync failed after 429 retry", true, 429);
+
     }
 }

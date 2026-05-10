@@ -1,5 +1,6 @@
 package com.windsearcher.domain;
 
+
 import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
@@ -13,14 +14,14 @@ public enum Role {
     /** 工具结果（OpenAI 为 tool；Anthropic 常以 user + tool_result 块表达） */
     TOOL("tool");
 
-    private final String apiName;
+    private final String desc;
 
-    Role(String apiName) {
-        this.apiName = apiName;
+    Role(String desc) {
+        this.desc = desc;
     }
 
     @JsonValue
-    public String apiName() {
-        return apiName;
+    public String getDesc() {
+        return desc;
     }
 }

@@ -1,7 +1,9 @@
 package com.windsearcher.domain;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.windsearcher.llm.LlmStreamSink;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -94,5 +96,11 @@ public class ChatRequest {
      * 调用模型层的超时时间
      */
     private Long timeoutMs;
+
+    /**
+     * 流式输出回调（仅流式调用使用；不参与 JSON 反序列化）。
+     */
+    @JsonIgnore
+    private LlmStreamSink streamSink;
 
 }

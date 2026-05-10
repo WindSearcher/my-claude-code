@@ -24,6 +24,8 @@ public class ChatMessage {
 
     private List<ContentBlock> blocks;
 
+    private List<ToolCall> toolCalls;
+
     /**
      * 当role=tool时关联的工具调用ID
      */
