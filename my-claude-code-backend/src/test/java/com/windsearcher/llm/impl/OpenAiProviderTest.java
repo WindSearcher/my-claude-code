@@ -35,7 +35,7 @@ class OpenAiProviderTest {
         provider = new OpenAiProvider(
                 "openai",
                 objectMapper,
-                "sk-61c5bfaa8a444bbaab1a3237286060d2",
+                "sk-xx",
                 "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 "qwen-max",
                 List.of("qwen-plus", "qwen-max")
@@ -51,32 +51,6 @@ class OpenAiProviderTest {
 
     @Test
     void chatSync_shouldReturnChatResponse() throws InterruptedException {
-//        String json = """
-//                {
-//                  "id": "chatcmpl-123",
-//                  "object": "chat.completion",
-//                  "model": "gpt-4o",
-//                  "choices": [
-//                    {
-//                      "index": 0,
-//                      "message": {
-//                        "role": "assistant",
-//                        "content": "Hello, world!"
-//                      },
-//                      "finish_reason": "stop"
-//                    }
-//                  ],
-//                  "usage": {
-//                    "prompt_tokens": 10,
-//                    "completion_tokens": 5
-//                  }
-//                }
-//                """;
-//        mockWebServer.enqueue(new MockResponse()
-//                .setResponseCode(200)
-//                .setBody(json)
-//                .addHeader("Content-Type", "application/json"));
-
         ChatRequest request = ChatRequest.builder()
                 .model("qwen-max")
                 .providerName("openai")
