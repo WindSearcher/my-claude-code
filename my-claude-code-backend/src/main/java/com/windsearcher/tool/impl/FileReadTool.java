@@ -7,7 +7,6 @@ import com.windsearcher.security.PathSecurityService;
 import com.windsearcher.tool.BaseTool;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -31,17 +30,13 @@ import java.util.stream.Collectors;
 public class FileReadTool implements BaseTool {
 
     private final PathSecurityService pathSecurity;
-    private final SessionManager sessionManager;
-    private final KeyFileTracker keyFileTracker;
 
-    public FileReadTool(PathSecurityService pathSecurity, SessionManager sessionManager,
-                        KeyFileTracker keyFileTracker) {
+    public FileReadTool(PathSecurityService pathSecurity) {
         this.pathSecurity = pathSecurity;
-        this.sessionManager = sessionManager;
-        this.keyFileTracker = keyFileTracker;
     }
 
-    private static final long MAX_SIZE_BYTES = 200 * 1024 * 1024; // 200MB
+    /**超过256KB的文件，不要全部读取到上下文中**/
+    private static final long MAX_SIZE_BYTES = 256 * 1024; // 256KB
     private static final int MAX_OUTPUT_LINES = 10_000; // 简化: 用行数近似 token 限制
     private static final Set<String> IMAGE_EXTENSIONS = Set.of(
             ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg");
@@ -103,6 +98,11 @@ public class FileReadTool implements BaseTool {
         return "read";
     }
 
+    /**
+     * 只读工具允许并发；写工具不允许并发
+     * @param input
+     * @return
+     */
     @Override
     public boolean isReadOnly(ToolInput input) {
         return true;
@@ -116,9 +116,9 @@ public class FileReadTool implements BaseTool {
 
     @Override
     public ToolResult call(ToolInput input, ToolUseContext context) {
-        //
-        Path resolved = pathSecurity.resolvePath(input.getString("file_path"), context.workingDirectory());
-        String filePath = resolved.toString();
+
+        Path workingPath = pathSecurity.resolvePath(input.getString("file_path"), context.getWorkingDirectory());
+        String filePath = workingPath.toString();
 
         // 1. PathSecurityService 统一安全检查
         PathSecurityService.PathCheckResult checkResult = pathSecurity.checkReadPermission(
@@ -131,14 +131,14 @@ public class FileReadTool implements BaseTool {
         }
 
         try {
-            Path path = resolved;
+            Path path = workingPath;
 
             // 2. 检查文件存在
             if (!Files.exists(path)) {
                 return ToolResult.error("File does not exist: " + filePath);
             }
 
-            // 3. 检查文件大小
+            // 3. 检查文件大小，文件太大，直接返回需要使用offset和limit来读取部分
             long fileSize = Files.size(path);
             if (fileSize > MAX_SIZE_BYTES) {
                 return ToolResult.error("File too large (" + fileSize + " bytes). "
