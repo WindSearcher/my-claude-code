@@ -23,14 +23,14 @@ public final class OpenAiChatRequestFactory {
     private OpenAiChatRequestFactory() {
     }
 
-    public static ObjectNode build(ObjectMapper mapper, ChatRequest request, boolean stream) {
+    public static ObjectNode build(ObjectMapper mapper, ChatRequest request) {
         ObjectNode root = mapper.createObjectNode();
         root.put("model", request.getModel());
         if (request.getMaxTokens() != null) {
             root.put("max_tokens", request.getMaxTokens());
         }
-        root.put("stream", stream);
-        if (stream) {
+        root.put("stream", request.isStream());
+        if (request.isStream()) {
             ObjectNode streamOpts = mapper.createObjectNode();
             streamOpts.put("include_usage", true);
             root.set("stream_options", streamOpts);
@@ -51,10 +51,10 @@ public final class OpenAiChatRequestFactory {
 
         List<ChatMessage> list = request.getMessages() == null ? List.of() : request.getMessages();
         for (ChatMessage m : list) {
-            if (m.getRole() == Role.SYSTEM) {
+            if (m.getRole() == Role.USER) {
                 ObjectNode sys = messages.addObject();
-                sys.put("role", "system");
-                sys.put("content", m.getContent() != null ? m.getContent() : "");
+                sys.put("role", m.getRole().getDesc());
+                sys.put("content", m.getContent());
                 continue;
             }
             if (m.getRole() == Role.TOOL) {
@@ -201,7 +201,7 @@ public final class OpenAiChatRequestFactory {
         o.put("tool_call_id", m.getToolCallId() != null ? m.getToolCallId() : "");
         String content = m.getContent() != null ? m.getContent() : "";
         if (!CollectionUtils.isEmpty(m.getBlocks())) {
-            ContentBlock b = m.getBlocks().getFirst();
+            ContentBlock b = m.getBlocks().get(0);
             if (b.getToolResult() != null) {
                 content = b.getToolResult();
             }

@@ -1,5 +1,6 @@
 package com.windsearcher.llm.impl;
 
+import com.alibaba.fastjson2.JSONObject;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -77,7 +78,7 @@ public class OpenAiProvider implements LlmProvider {
     @Override
     public ChatResponse streamChat(ChatRequest request) {
         ensureModel(request);
-        ObjectNode body = OpenAiChatRequestFactory.build(objectMapper, request, true);
+        ObjectNode body = OpenAiChatRequestFactory.build(objectMapper, request);
         long timeoutMs = effectiveTimeoutMs(request);
         OkHttpClient client = httpClient.newBuilder()
                 .callTimeout(Duration.ofMillis(timeoutMs))
@@ -112,7 +113,7 @@ public class OpenAiProvider implements LlmProvider {
         ensureModel(request);
 
         // 1. 构建非流式请求体
-        ObjectNode body = OpenAiChatRequestFactory.build(objectMapper, request, false);
+        ObjectNode body = OpenAiChatRequestFactory.build(objectMapper, request);
         long timeoutMs = effectiveTimeoutMs(request);
 
         // 2. 构建带超时的 OkHttpClient（共享连接池，线程安全）
@@ -142,18 +143,20 @@ public class OpenAiProvider implements LlmProvider {
 //                String msg = root.path("error").path("message").asText(root.toString());
 //                throw new LlmApiException("OpenAI error: " + msg, false);
 //            }
-            ChatResponse built = mapCompletionJson(root);
-            LlmStreamSink sink = request.getStreamSink();
-            if (sink != null) {
-                if (built.getContent() != null && !built.getContent().isEmpty()) {
-                    sink.onTextDelta(built.getContent());
-                }
-                if (built.getUsageInputTokens() != null && built.getUsageOutputTokens() != null) {
-                    sink.onUsage(built.getUsageInputTokens(), built.getUsageOutputTokens());
-                }
-                sink.onMessageComplete(built.getFinishReason() != null ? built.getFinishReason() : "stop");
-            }
-            return built;
+            ChatResponse chatResponse = mapCompletionJson(root);
+//            LlmStreamSink sink = request.getStreamSink();
+//            if (sink != null) {
+//                if (built.getContent() != null && !built.getContent().isEmpty()) {
+//                    sink.onTextDelta(built.getContent());
+//                }
+//                if (built.getUsageInputTokens() != null && built.getUsageOutputTokens() != null) {
+//                    sink.onUsage(built.getUsageInputTokens(), built.getUsageOutputTokens());
+//                }
+//                sink.onMessageComplete(built.getFinishReason() != null ? built.getFinishReason() : "stop");
+//            }
+
+            log.info("OpenAiProvider chatResponse={}", JSONObject.toJSONString(chatResponse));
+            return chatResponse;
         } catch (LlmApiException e) {
             throw e;
         } catch (IOException e) {

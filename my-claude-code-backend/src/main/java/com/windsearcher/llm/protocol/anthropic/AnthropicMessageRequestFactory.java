@@ -143,7 +143,7 @@ public final class AnthropicMessageRequestFactory {
         boolean isError = false;
         String text = m.getContent() != null ? m.getContent() : "";
         if (!CollectionUtils.isEmpty(m.getBlocks())) {
-            ContentBlock b = m.getBlocks().getFirst();
+            ContentBlock b = m.getBlocks().get(0);
             if ("tool_result".equals(b.getType()) || b.getToolResult() != null) {
                 if (b.getToolResult() != null) {
                     text = b.getToolResult();

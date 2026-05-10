@@ -1,7 +1,7 @@
 package com.windsearcher.tool;
 
 public record ValidationResult(boolean ok, String message) {
-    public static ValidationResult ok() {
+    public static ValidationResult success() {
         return new ValidationResult(true, null);
     }
 

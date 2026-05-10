@@ -137,7 +137,7 @@ public interface Tool {
 
     /** 验证工具输入 */
     default ValidationResult validateInput(ToolInput input, ToolUseContext context) {
-        return ValidationResult.ok();
+        return ValidationResult.success();
     }
 
     /** 获取操作路径 */
