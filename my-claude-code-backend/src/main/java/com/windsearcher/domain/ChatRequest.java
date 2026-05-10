@@ -41,9 +41,16 @@ public class ChatRequest {
 
 
     /**
-     * 工具列表
+     * 工具列表，传入字符串类型；字符串的json结构如下：
+     * [
+     *  {
+     *      "name":"",
+     *      "description":"",
+     *      "inputSchema":""
+     *  }
+     * ]
      */
-
+    private List<Map<String, Object>> tools;
 
     /**
      * 工具选择策略：auto / any / none / 工具名

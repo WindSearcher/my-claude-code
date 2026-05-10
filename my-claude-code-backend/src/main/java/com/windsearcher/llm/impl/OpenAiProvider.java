@@ -39,9 +39,55 @@ public class OpenAiProvider implements LlmProvider {
     private final ObjectMapper objectMapper;
 
     private final OkHttpClient httpClient;
-
+    private final String providerName;
+    private final List<String> supportedModels;
     private final String apiKey;
     private final String baseUrl;
+
+    /** 内置模型能力映射表*/
+//    private static final Map<String, ModelCapabilities> MODEL_CAPABILITIES = Map.ofEntries(
+//            // OpenAI 模型
+//            Map.entry("gpt-4o", new ModelCapabilities("gpt-4o", "GPT-4o", 16384, 128000, true, false, true, true, 0.005, 0.015)),
+//            Map.entry("gpt-4o-mini", new ModelCapabilities("gpt-4o-mini", "GPT-4o Mini", 16384, 128000, true, false, true, true, 0.00015, 0.0006)),
+//            Map.entry("gpt-4-turbo", new ModelCapabilities("gpt-4-turbo", "GPT-4 Turbo", 4096, 128000, true, false, true, true, 0.01, 0.03)),
+//            // DeepSeek 模型
+//            Map.entry("deepseek-chat", new ModelCapabilities("deepseek-chat", "DeepSeek Chat", 8192, 64000, true, true, false, true, 0.00027, 0.0011)),
+//            Map.entry("deepseek-reasoner", new ModelCapabilities("deepseek-reasoner", "DeepSeek Reasoner", 8192, 64000, true, true, false, false, 0.00055, 0.0022)),
+//            Map.entry("deepseek-v4-pro", new ModelCapabilities("deepseek-v4-pro", "DeepSeek V4 Pro", 384000, 1000000, true, true, false, true, 0.001, 0.004)),
+//            Map.entry("deepseek-v4-flash", new ModelCapabilities("deepseek-v4-flash", "DeepSeek V4 Flash", 384000, 1000000, true, true, false, true, 0.0005, 0.002)),
+//            // 阿里云百炼 - 通义千问模型（qwen-max/plus/turbo/3.6-plus 已迁移至 ModelRegistry.BUILTIN_MODELS）
+//            Map.entry("qwen-coder-plus", new ModelCapabilities("qwen-coder-plus", "通义千问 Coder Plus", 8192, 131072, true, false, false, true, 0.0007, 0.002))
+//    );
+
+    public OpenAiProvider(
+            String providerName,
+            ObjectMapper objectMapper,
+            String apiKey,
+            String baseUrl,
+            String defaultModel,
+            List<String> supportedModels) {
+        this.providerName = providerName;
+        this.objectMapper = objectMapper;
+        this.apiKey = apiKey;
+
+        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+
+        this.supportedModels = supportedModels;
+
+        this.httpClient = new OkHttpClient.Builder()
+                .connectionPool(new ConnectionPool(
+                        20,
+                       20,
+                        java.util.concurrent.TimeUnit.SECONDS))
+                .connectTimeout(Duration.ofSeconds(300))
+                .readTimeout(Duration.ofMinutes(5)) // SSE 5分钟读超时（防止连接泄漏）
+                .writeTimeout(Duration.ofSeconds(300))
+                .retryOnConnectionFailure(true)
+                .build();
+
+        log.info("OpenAIprovider initialized: baseUrl={}, models={}", this.baseUrl, supportedModels);
+    }
+
 
     @Override
     public String getProviderName() {
@@ -78,6 +124,16 @@ public class OpenAiProvider implements LlmProvider {
             sysMsg.put("role", "system");
             sysMsg.put("content", chatRequest.getSystemPrompt());
         }
+
+        if (chatRequest.getTemperature() != null) {
+            root.put("temperature", chatRequest.getTemperature());
+        }
+
+        if (chatRequest.getTopP() != null) {
+            root.put("top_p", chatRequest.getTopP());
+        }
+
+        root.put("stream", chatRequest.isStream());
 
         // 2. 转换消息列表 — Anthropic 内部格式 → OpenAI Chat Completions 格式
         for (Map<String, Object> msg : chatRequest.getMessages()) {
@@ -194,16 +250,20 @@ public class OpenAiProvider implements LlmProvider {
             }
         }
 
+
+
         // 3. 工具定义
         if (CollectionUtils.isEmpty(chatRequest.getTools())) {
             ArrayNode toolsArray = root.putArray("tools");
-            for (Map<String, Object> tool : tools) {
+            for (Map<String, Object> tool : chatRequest.getTools()) {
                 toolsArray.add(objectMapper.valueToTree(tool));
             }
         }
 
         return root;
     }
+
+
 
     @Override
     public void chatSync(ChatRequest chatRequest) {
