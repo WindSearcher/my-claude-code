@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.windsearcher.domain.ChatRequest;
 import com.windsearcher.domain.ChatResponse;
+import com.windsearcher.domain.TokenUsage;
 import com.windsearcher.domain.ToolCall;
 import com.windsearcher.exception.LlmApiException;
 import com.windsearcher.llm.LlmProvider;
@@ -143,6 +144,8 @@ public class OpenAiProvider implements LlmProvider {
 //                String msg = root.path("error").path("message").asText(root.toString());
 //                throw new LlmApiException("OpenAI error: " + msg, false);
 //            }
+
+//            log.info("OpenAiProvider responseRaw={}", JSONObject.toJSONString(root));
             ChatResponse chatResponse = mapCompletionJson(root);
 //            LlmStreamSink sink = request.getStreamSink();
 //            if (sink != null) {
@@ -187,9 +190,8 @@ public class OpenAiProvider implements LlmProvider {
             reasoning = null;
         }
         List<ToolCall> tools = parseToolCallsFromMessage(message);
-        JsonNode usage = root.path("usage");
-        Integer inTok = usage.has("prompt_tokens") ? usage.get("prompt_tokens").asInt() : null;
-        Integer outTok = usage.has("completion_tokens") ? usage.get("completion_tokens").asInt() : null;
+        TokenUsage tokenUsage = parseUsage(root.path("usage"));
+
         return ChatResponse.builder()
                 .id(root.path("id").asText(null))
                 .model(root.path("model").asText(null))
@@ -198,10 +200,80 @@ public class OpenAiProvider implements LlmProvider {
                 .reasoningContent(reasoning)
                 .toolCalls(tools.isEmpty() ? List.of() : tools)
                 .finishReason(nullIfEmpty(choice0.path("finish_reason").asText(null)))
-                .usageInputTokens(inTok)
-                .usageOutputTokens(outTok)
+                .tokenUsage(tokenUsage)
                 .rawJson(root)
                 .build();
+    }
+
+    private TokenUsage parseUsage(JsonNode usage) {
+        if (usage == null || usage.isNull()) {
+            return null;
+        }
+
+        TokenUsage.TokenUsageBuilder builder = TokenUsage.builder();
+
+        if (usage.has("prompt_tokens")) {
+            builder.inputTokens(usage.get("prompt_tokens").asInt());
+        }
+        if (usage.has("completion_tokens")) {
+            builder.completionTokens(usage.get("completion_tokens").asInt());
+        }
+        if (usage.has("total_tokens")) {
+            builder.totalTokens(usage.get("total_tokens").asInt());
+        }
+
+        JsonNode promptDetails = usage.get("prompt_tokens_details");
+        if (promptDetails != null && !promptDetails.isNull()) {
+            TokenUsage.InputTokensDetails.InputTokensDetailsBuilder pdBuilder =
+                    TokenUsage.InputTokensDetails.builder();
+            if (promptDetails.has("cached_tokens")) {
+                pdBuilder.cachedTokens(promptDetails.get("cached_tokens").asInt());
+            }
+            if (promptDetails.has("audio_tokens")) {
+                pdBuilder.audioTokens(promptDetails.get("audio_tokens").asInt());
+            }
+//            if (promptDetails.has("text_tokens")) {
+//                pdBuilder.textTokens(promptDetails.get("text_tokens").asInt());
+//            }
+            if (promptDetails.has("image_tokens")) {
+                pdBuilder.imageTokens(promptDetails.get("image_tokens").asInt());
+            }
+            if (promptDetails.has("video_tokens")) {
+                pdBuilder.videoTokens(promptDetails.get("video_tokens").asInt());
+            }
+            builder.inputTokensDetails(pdBuilder.build());
+        }
+
+        JsonNode completionDetails = usage.get("completion_tokens_details");
+        if (completionDetails != null && !completionDetails.isNull()) {
+            TokenUsage.CompletionTokensDetails.CompletionTokensDetailsBuilder cdBuilder =
+                    TokenUsage.CompletionTokensDetails.builder();
+            if (completionDetails.has("audio_tokens")) {
+                cdBuilder.audioTokens(completionDetails.get("audio_tokens").asInt());
+            }
+            if (completionDetails.has("reasoning_tokens")) {
+                cdBuilder.reasoningTokens(completionDetails.get("reasoning_tokens").asInt());
+            }
+            if (completionDetails.has("text_tokens")) {
+                cdBuilder.textTokens(completionDetails.get("text_tokens").asInt());
+            }
+            builder.completionTokensDetails(cdBuilder.build());
+        }
+
+//        JsonNode cacheCreation = usage.get("cache_creation");
+//        if (cacheCreation != null && !cacheCreation.isNull()) {
+//            TokenUsage.CacheCreation.CacheCreationBuilder ccBuilder =
+//                    TokenUsage.CacheCreation.builder();
+//            if (cacheCreation.has("cache_creation_input_tokens")) {
+//                ccBuilder.cacheCreationInputTokens(cacheCreation.get("cache_creation_input_tokens").asInt());
+//            }
+//            if (cacheCreation.has("cache_type")) {
+//                ccBuilder.cacheType(cacheCreation.get("cache_type").asText(null));
+//            }
+//            builder.cacheCreation(ccBuilder.build());
+//        }
+
+        return builder.build();
     }
 
     private static String nullIfEmpty(String s) {
@@ -316,11 +388,10 @@ public class OpenAiProvider implements LlmProvider {
             }
             JsonNode usage = chunk.get("usage");
             if (usage != null && !usage.isNull()) {
-                int inTok = usage.path("prompt_tokens").asInt(0);
-                int outTok = usage.path("completion_tokens").asInt(0);
-                agg.usageInputTokens = inTok;
-                agg.usageOutputTokens = outTok;
-                if (userSink != null) {
+                agg.tokenUsage = parseUsage(usage);
+                if (agg.tokenUsage != null && userSink != null) {
+                    int inTok = agg.tokenUsage.getPromptTokens() != null ? agg.tokenUsage.getPromptTokens() : 0;
+                    int outTok = agg.tokenUsage.getCompletionTokens() != null ? agg.tokenUsage.getCompletionTokens() : 0;
                     userSink.onUsage(inTok, outTok);
                 }
             }
@@ -336,8 +407,7 @@ public class OpenAiProvider implements LlmProvider {
                 .reasoningContent(reasoningStr)
                 .toolCalls(toolCalls)
                 .finishReason(agg.finishReason != null ? agg.finishReason : "stop")
-                .usageInputTokens(agg.usageInputTokens)
-                .usageOutputTokens(agg.usageOutputTokens)
+                .tokenUsage(agg.tokenUsage)
                 .build();
         if (userSink != null) {
             userSink.onMessageComplete(response.getFinishReason() != null ? response.getFinishReason() : "stop");
@@ -418,8 +488,7 @@ public class OpenAiProvider implements LlmProvider {
         final StringBuilder reasoning = new StringBuilder();
         final TreeMap<Integer, ToolSlot> toolsByIndex = new TreeMap<>();
         String finishReason;
-        Integer usageInputTokens;
-        Integer usageOutputTokens;
+        TokenUsage tokenUsage;
 
         List<ToolCall> buildToolCalls(ObjectMapper mapper) {
             List<ToolCall> list = new ArrayList<>();

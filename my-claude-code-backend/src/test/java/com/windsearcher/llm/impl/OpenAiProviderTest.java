@@ -88,16 +88,6 @@ class OpenAiProviderTest {
 
         ChatResponse response = provider.chatSync(request);
 
-//        assertThat(response.getId()).isEqualTo("chatcmpl-123");
-//        assertThat(response.getModel()).isEqualTo("gpt-4o");
-//        assertThat(response.getRole()).isEqualTo("assistant");
-//        assertThat(response.getContent()).isEqualTo("Hello, world!");
-//        assertThat(response.getFinishReason()).isEqualTo("stop");
-//        assertThat(response.getUsageInputTokens()).isEqualTo(10);
-//        assertThat(response.getUsageOutputTokens()).isEqualTo(5);
-//        assertThat(response.getToolCalls()).isEmpty();
-//
-//
     }
 
 //    @Test

@@ -20,15 +20,27 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ChatResponse {
 
+    /**
+     * 模型调用ID
+     */
     private String id;
 
+    /**
+     * 使用的模型
+     */
     private String model;
 
     /** 通常为 assistant */
     private String role;
 
+    /**
+     * 模型返回的文本内容
+     */
     private String content;
 
+    /**
+     * 模型返回的推理内容
+     */
     private String reasoningContent;
 
     @Builder.Default
@@ -37,10 +49,8 @@ public class ChatResponse {
     /** OpenAI: finish_reason；与流式 sink 语义对齐的简短标记 */
     private String finishReason;
 
-    private Integer usageInputTokens;
-
-    private Integer usageOutputTokens;
-
     /** 可选：完整响应 JSON（同步或流结束后的最后快照） */
     private JsonNode rawJson;
+
+    private TokenUsage tokenUsage;
 }
