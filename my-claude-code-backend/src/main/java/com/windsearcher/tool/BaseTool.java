@@ -1,18 +1,17 @@
 package com.windsearcher.tool;
 
+import com.windsearcher.domain.ToolInput;
+import com.windsearcher.domain.ToolResult;
+import com.windsearcher.domain.ToolUseContext;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 所有工具的基础接口 — 后端核心方法 (ToolCore)。
- * <p>
- * 渲染方法由前端 React 组件负责。
- * <p>
- * 工具是 LLM 与外部世界交互的唯一通道。
- *
+ * 所有工具的基础接口，不仅是参赛，还包含权限、是否并行
  */
-public interface Tool {
+public interface BaseTool {
 
     // ==================== 基础标识 ====================
 

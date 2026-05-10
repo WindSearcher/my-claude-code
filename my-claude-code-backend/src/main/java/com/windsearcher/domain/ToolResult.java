@@ -1,4 +1,4 @@
-package com.windsearcher.tool;
+package com.windsearcher.domain;
 
 /** 工具执行结果占位。 */
 public record ToolResult(boolean ok, String content, String errorMessage) {

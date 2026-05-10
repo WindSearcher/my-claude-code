@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.windsearcher.domain.ChatRequest;
 import com.windsearcher.domain.ChatResponse;
+import com.windsearcher.domain.TokenUsage;
 import com.windsearcher.domain.ToolCall;
+import com.windsearcher.llm.util.UsageParser;
 import com.windsearcher.exception.LlmApiException;
 import com.windsearcher.llm.LlmProvider;
 import com.windsearcher.llm.LlmStreamSink;
@@ -86,16 +88,16 @@ public class AnthropicProvider implements LlmProvider {
             JsonNode root = client.createBlocking(baseUrl, apiKey, body, timeoutMs);
             ChatResponse response = mapBlockingToResponse(root, request.getModel());
             LlmStreamSink sink = request.getStreamSink();
-            if (sink != null) {
-                if (response.getContent() != null && !response.getContent().isEmpty()) {
-                    sink.onTextDelta(response.getContent());
-                }
-                if (response.getUsageInputTokens() != null && response.getUsageOutputTokens() != null) {
-                    sink.onUsage(response.getUsageInputTokens(), response.getUsageOutputTokens());
-                }
-                String stop = response.getFinishReason() != null ? response.getFinishReason() : "end_turn";
-                sink.onMessageComplete(stop);
-            }
+//            if (sink != null) {
+//                if (response.getContent() != null && !response.getContent().isEmpty()) {
+//                    sink.onTextDelta(response.getContent());
+//                }
+//                if (response.getUsageInputTokens() != null && response.getUsageOutputTokens() != null) {
+//                    sink.onUsage(response.getUsageInputTokens(), response.getUsageOutputTokens());
+//                }
+//                String stop = response.getFinishReason() != null ? response.getFinishReason() : "end_turn";
+//                sink.onMessageComplete(stop);
+//            }
             return response;
         } catch (IOException e) {
             throw new LlmApiException("Anthropic chatSync failed: " + e.getMessage(), e, true);
@@ -106,9 +108,7 @@ public class AnthropicProvider implements LlmProvider {
         String text = extractAssistantText(root);
         String thinking = extractThinkingText(root);
         List<ToolCall> tools = extractToolUses(root);
-        JsonNode u = root.path("usage");
-        Integer inTok = u.has("input_tokens") ? u.get("input_tokens").asInt() : null;
-        Integer outTok = u.has("output_tokens") ? u.get("output_tokens").asInt() : null;
+        TokenUsage tokenUsage = UsageParser.parseUsage(root.path("usage"));
         return ChatResponse.builder()
                 .id(root.path("id").asText(null))
                 .model(root.path("model").asText(modelFallback))
@@ -117,8 +117,7 @@ public class AnthropicProvider implements LlmProvider {
                 .reasoningContent(thinking.isEmpty() ? null : thinking)
                 .toolCalls(tools)
                 .finishReason(mapStopReason(root.path("stop_reason").asText(null)))
-                .usageInputTokens(inTok)
-                .usageOutputTokens(outTok)
+                .tokenUsage(tokenUsage)
                 .rawJson(root)
                 .build();
     }
@@ -312,8 +311,13 @@ public class AnthropicProvider implements LlmProvider {
                         .arguments(argsNode)
                         .build());
             }
-            Integer inTok = usageIn >= 0 ? usageIn : null;
-            Integer outTok = usageOut >= 0 ? usageOut : null;
+            TokenUsage tokenUsage = null;
+//            if (usageIn >= 0 || usageOut >= 0) {
+//                tokenUsage = TokenUsage.builder()
+//                        .promptTokens(usageIn >= 0 ? usageIn : null)
+//                        .completionTokens(usageOut >= 0 ? usageOut : null)
+//                        .build();
+//            }
             return ChatResponse.builder()
                     .model(model)
                     .role("assistant")
@@ -321,8 +325,7 @@ public class AnthropicProvider implements LlmProvider {
                     .reasoningContent(reasoning.isEmpty() ? null : reasoning.toString())
                     .toolCalls(toolCalls)
                     .finishReason(stopReason)
-                    .usageInputTokens(inTok)
-                    .usageOutputTokens(outTok)
+                    .tokenUsage(tokenUsage)
                     .build();
         }
     }
