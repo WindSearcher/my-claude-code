@@ -2,6 +2,7 @@ package com.windsearcher.llm;
 
 
 import com.windsearcher.domain.ChatRequest;
+import com.windsearcher.domain.ChatResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -33,11 +34,11 @@ public interface LlmProvider {
     /**
      * 流式调用
      */
-    void streamChat(ChatRequest request);
+    ChatResponse streamChat(ChatRequest request);
 
     /**
      * 同步调用
      */
-    void chatSync(ChatRequest request);
+    ChatResponse chatSync(ChatRequest request);
 
 }

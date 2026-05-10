@@ -1,66 +1,45 @@
 package com.windsearcher.llm.impl;
 
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.windsearcher.domain.ChatMessage;
 import com.windsearcher.domain.ChatRequest;
-import com.windsearcher.domain.Role;
+import com.windsearcher.domain.ChatResponse;
 import com.windsearcher.domain.ToolCall;
 import com.windsearcher.exception.LlmApiException;
 import com.windsearcher.llm.LlmProvider;
+import com.windsearcher.llm.LlmStreamSink;
+import com.windsearcher.llm.protocol.openai.OpenAiChatRequestFactory;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.util.CollectionUtils;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
- * OpenAi协议层，支持所有 OpenAI Chat Completions API 兼容的模型服务。
- *  * <p>
- *  * 通过 baseUrl 可配置性，一套代码同时支持:
- *  * <ul>
- *  *   <li>OpenAI 官方 (https://api.openai.com/v1)</li>
- *  *   <li>Ollama 本地模型 (http://localhost:11434/v1)</li>
- *  *   <li>通义千问 DashScope (https://dashscope.aliyuncs.com/compatible-mode/v1)</li>
- *  *   <li>其他 OpenAI 兼容 API（DeepSeek、Moonshot、智谱等）</li>
- *  * </ul>
- *  *
- *  流式如何返回？
+ * OpenAI Chat Completions 兼容协议 — HTTP、SSE 与 {@link ChatResponse} 装配均在本类完成；
+ * 请求体由 {@link OpenAiChatRequestFactory} 构建。
  */
 @Slf4j
 public class OpenAiProvider implements LlmProvider {
 
     private static final MediaType JSON_MEDIA = MediaType.parse("application/json");
+    private static final long DEFAULT_TIMEOUT_MS = 600000L;
 
     private final ObjectMapper objectMapper;
-
     private final OkHttpClient httpClient;
     private final String providerName;
     private final List<String> supportedModels;
     private final String apiKey;
     private final String baseUrl;
-
-    /** 内置模型能力映射表*/
-//    private static final Map<String, ModelCapabilities> MODEL_CAPABILITIES = Map.ofEntries(
-//            // OpenAI 模型
-//            Map.entry("gpt-4o", new ModelCapabilities("gpt-4o", "GPT-4o", 16384, 128000, true, false, true, true, 0.005, 0.015)),
-//            Map.entry("gpt-4o-mini", new ModelCapabilities("gpt-4o-mini", "GPT-4o Mini", 16384, 128000, true, false, true, true, 0.00015, 0.0006)),
-//            Map.entry("gpt-4-turbo", new ModelCapabilities("gpt-4-turbo", "GPT-4 Turbo", 4096, 128000, true, false, true, true, 0.01, 0.03)),
-//            // DeepSeek 模型
-//            Map.entry("deepseek-chat", new ModelCapabilities("deepseek-chat", "DeepSeek Chat", 8192, 64000, true, true, false, true, 0.00027, 0.0011)),
-//            Map.entry("deepseek-reasoner", new ModelCapabilities("deepseek-reasoner", "DeepSeek Reasoner", 8192, 64000, true, true, false, false, 0.00055, 0.0022)),
-//            Map.entry("deepseek-v4-pro", new ModelCapabilities("deepseek-v4-pro", "DeepSeek V4 Pro", 384000, 1000000, true, true, false, true, 0.001, 0.004)),
-//            Map.entry("deepseek-v4-flash", new ModelCapabilities("deepseek-v4-flash", "DeepSeek V4 Flash", 384000, 1000000, true, true, false, true, 0.0005, 0.002)),
-//            // 阿里云百炼 - 通义千问模型（qwen-max/plus/turbo/3.6-plus 已迁移至 ModelRegistry.BUILTIN_MODELS）
-//            Map.entry("qwen-coder-plus", new ModelCapabilities("qwen-coder-plus", "通义千问 Coder Plus", 8192, 131072, true, false, false, true, 0.0007, 0.002))
-//    );
+    private final String defaultModel;
 
     public OpenAiProvider(
             String providerName,
@@ -72,25 +51,18 @@ public class OpenAiProvider implements LlmProvider {
         this.providerName = providerName;
         this.objectMapper = objectMapper;
         this.apiKey = apiKey;
-
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-
-        this.supportedModels = supportedModels;
-
+        this.supportedModels = supportedModels != null ? supportedModels : List.of();
+        this.defaultModel = defaultModel;
         this.httpClient = new OkHttpClient.Builder()
-                .connectionPool(new ConnectionPool(
-                        20,
-                       20,
-                        java.util.concurrent.TimeUnit.SECONDS))
+                .connectionPool(new ConnectionPool(20, 20, java.util.concurrent.TimeUnit.SECONDS))
                 .connectTimeout(Duration.ofSeconds(300))
-                .readTimeout(Duration.ofMinutes(5)) // SSE 5分钟读超时（防止连接泄漏）
+                .readTimeout(Duration.ofMinutes(5))
                 .writeTimeout(Duration.ofSeconds(300))
                 .retryOnConnectionFailure(true)
                 .build();
-
-        log.info("OpenAIprovider initialized: baseUrl={}, models={}", this.baseUrl, supportedModels);
+        log.info("OpenAiProvider initialized: baseUrl={}, models={}", this.baseUrl, this.supportedModels);
     }
-
 
     @Override
     public String getProviderName() {
@@ -103,159 +75,379 @@ public class OpenAiProvider implements LlmProvider {
     }
 
     @Override
-    public void streamChat(ChatRequest request) {
-
-    }
-
-
-    /**
-     * 构建基础请求体（不含 stream 设置）。
-     * 公共逻辑：model、max_tokens、messages、system prompt、tools。
-     * 由 buildOpenAiRequest（流式）和 chatSync（非流式）共享。
-     */
-    private ObjectNode buildBaseRequest(ChatRequest chatRequest) {
-
-        ObjectNode root = objectMapper.createObjectNode();
-        root.put("model", chatRequest.getModel());
-        root.put("max_tokens", chatRequest.getMaxTokens());
-
-        ArrayNode messagesArray = root.putArray("messages");
-
-        // 1. 系统提示 → system 消息
-        if (StringUtils.isNotEmpty(chatRequest.getSystemPrompt())) {
-            ObjectNode sysMsg = messagesArray.addObject();
-            sysMsg.put("role", "system");
-            sysMsg.put("content", chatRequest.getSystemPrompt());
-        }
-
-        if (chatRequest.getTemperature() != null) {
-            root.put("temperature", chatRequest.getTemperature());
-        }
-
-        if (chatRequest.getTopP() != null) {
-            root.put("top_p", chatRequest.getTopP());
-        }
-
-        root.put("stream", chatRequest.isStream());
-
-        // 2. 转换消息列表 — Anthropic 内部格式 → OpenAI Chat Completions 格式
-        ArrayNode messages = buildOpenAiMessage(chatRequest.getMessages());
-        root.set("messages", messages);
-
-
-        // 3. 工具定义
-        if (CollectionUtils.isEmpty(chatRequest.getTools())) {
-            ArrayNode toolsArray = root.putArray("tools");
-            for (Map<String, Object> tool : chatRequest.getTools()) {
-                toolsArray.add(objectMapper.valueToTree(tool));
-            }
-        }
-
-        return root;
-    }
-
-    private ArrayNode buildOpenAiMessage(List<ChatMessage> chatMessages) {
-        ArrayNode messages = objectMapper.createArrayNode();
-        for (ChatMessage chatMessage : chatMessages) {
-            ObjectNode node = objectMapper.createObjectNode();
-            node.put("role", chatMessage.getRole().getDesc());
-            node.put("content", chatMessage.getContent());
-            // tool result message
-//            if (chatMessage.getRole() == Role.TOOL) {
-//                if (chatMessage.getToolCallId() != null) {
-//                    node.put("tool_call_id", chatMessage.getToolCallId());
-//                }
-//                if (chatMessage.getToolName() != null) {
-//
-//                }
-//            }
-
-            // assistant含工具调用
-            boolean hasToolCall = chatMessage.getToolCalls() != null
-                    && !chatMessage.getToolCalls().isEmpty();
-
-            if (chatMessage.getRole() == Role.ASSISTANT && hasToolCall) {
-                ArrayNode arr = objectMapper.createArrayNode();
-                for (ToolCall toolCall : chatMessage.getToolCalls()) {
-                    ObjectNode tcn = objectMapper.createObjectNode();
-                    tcn.put("id", toolCall.getId());
-                    tcn.put("type", "function");
-                    ObjectNode fn = objectMapper.createObjectNode();
-
-                    fn.put("name", toolCall.getName());
-                    String arguments;
-                    if (toolCall.getArgumentsRaw() != null) {
-                        arguments = toolCall.getArgumentsRaw();
-                    } else if (toolCall.getArguments() != null) {
-                        arguments = toolCall.getArguments().toString();
-                    } else {
-                        arguments = "{}";
-                    }
-                    fn.put("arguments", arguments);
-                    tcn.set("function", tcn);
-                    arr.add(tcn);
-                }
-
-                node.set("tool_calls", arr);
-            }
-
-            messages.add(node);
-        }
-
-        return messages;
-    }
-
-
-    @Override
-    public void chatSync(ChatRequest chatRequest) {
-
-        // 1. 构建非流式请求体
-        ObjectNode requestBody = buildBaseRequest(chatRequest);
-        requestBody.put("stream", false);
-
-        // 2. 添加 stop sequences
-        if (chatRequest.getStopSequences() != null && chatRequest.getStopSequences().size() > 0) {
-            ArrayNode stopArray = requestBody.putArray("stop");
-            for (String seq : chatRequest.getStopSequences()) {
-                stopArray.add(seq);
-            }
-        }
-
-        // 3. 构建带超时的 OkHttpClient（共享连接池，线程安全）
-        OkHttpClient syncClient = httpClient.newBuilder()
-                .callTimeout(Duration.ofMillis(chatRequest.getTimeoutMs()))
-                .readTimeout(Duration.ofMillis(chatRequest.getTimeoutMs()))
+    public ChatResponse streamChat(ChatRequest request) {
+        ensureModel(request);
+        ObjectNode body = OpenAiChatRequestFactory.build(objectMapper, request, true);
+        long timeoutMs = effectiveTimeoutMs(request);
+        OkHttpClient client = httpClient.newBuilder()
+                .callTimeout(Duration.ofMillis(timeoutMs))
+                .readTimeout(Duration.ofMillis(timeoutMs))
                 .build();
-
-        Request request = new Request.Builder()
+        Request httpRequest = new Request.Builder()
                 .url(baseUrl + "/chat/completions")
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
-                .post(RequestBody.create(requestBody.toString(), JSON_MEDIA))
+                .post(RequestBody.create(body.toString(), JSON_MEDIA))
                 .build();
-
-        try (Response response = syncClient.newCall(request).execute()) {
-
+        LlmStreamSink userSink = request.getStreamSink();
+        try (Response response = client.newCall(httpRequest).execute()) {
             if (!response.isSuccessful()) {
-                throw new LlmApiException(
-                        "chatSync HTTP " + response.code(),
-                        response.code() >= 500, response.code());
+                String err = response.body() != null ? response.body().string() : "";
+                throw new LlmApiException("streamChat HTTP " + response.code() + ": " + err, response.code() >= 500, response.code());
             }
-
-            ResponseBody body = response.body();
-            if (body == null) {
-                throw new LlmApiException("Empty chatSync response", true);
+            ResponseBody rb = response.body();
+            if (rb == null) {
+                throw new LlmApiException("Empty stream body", true);
             }
-
-            JsonNode root = objectMapper.readTree(body.string());
-
-            // TODO.帮我将返回结果写入到ChatResponse中
-
+            return parseSseStream(rb, userSink);
         } catch (LlmApiException e) {
             throw e;
         } catch (IOException e) {
-            throw new LlmApiException("chatSync IO error: " + e.getMessage(), true);
+            throw new LlmApiException("streamChat IO: " + e.getMessage(), e, true);
         }
+    }
 
+    @Override
+    public ChatResponse chatSync(ChatRequest request) {
+        ensureModel(request);
+
+        // 1. 构建非流式请求体
+        ObjectNode body = OpenAiChatRequestFactory.build(objectMapper, request, false);
+        long timeoutMs = effectiveTimeoutMs(request);
+
+        // 2. 构建带超时的 OkHttpClient（共享连接池，线程安全）
+        OkHttpClient client = httpClient.newBuilder()
+                .callTimeout(Duration.ofMillis(timeoutMs))
+                .readTimeout(Duration.ofMillis(timeoutMs))
+                .build();
+        Request httpRequest = new Request.Builder()
+                .url(baseUrl + "/chat/completions")
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .post(RequestBody.create(body.toString(), JSON_MEDIA))
+                .build();
+
+        // 3. 执行请求
+        try (Response response = client.newCall(httpRequest).execute()) {
+            if (!response.isSuccessful()) {
+                String err = response.body() != null ? response.body().string() : "";
+                throw new LlmApiException("chatSync HTTP " + response.code() + ": " + err, response.code() >= 500, response.code());
+            }
+            ResponseBody rb = response.body();
+            if (rb == null) {
+                throw new LlmApiException("Empty chatSync response", true);
+            }
+            JsonNode root = objectMapper.readTree(rb.string());
+//            if (root.has("error")) {
+//                String msg = root.path("error").path("message").asText(root.toString());
+//                throw new LlmApiException("OpenAI error: " + msg, false);
+//            }
+            ChatResponse built = mapCompletionJson(root);
+            LlmStreamSink sink = request.getStreamSink();
+            if (sink != null) {
+                if (built.getContent() != null && !built.getContent().isEmpty()) {
+                    sink.onTextDelta(built.getContent());
+                }
+                if (built.getUsageInputTokens() != null && built.getUsageOutputTokens() != null) {
+                    sink.onUsage(built.getUsageInputTokens(), built.getUsageOutputTokens());
+                }
+                sink.onMessageComplete(built.getFinishReason() != null ? built.getFinishReason() : "stop");
+            }
+            return built;
+        } catch (LlmApiException e) {
+            throw e;
+        } catch (IOException e) {
+            throw new LlmApiException("chatSync IO error: " + e.getMessage(), e, true);
+        }
+    }
+
+    private void ensureModel(ChatRequest request) {
+        if (request.getModel() == null || request.getModel().isBlank()) {
+            if (defaultModel == null || defaultModel.isBlank()) {
+                throw new LlmApiException("model is required (no defaultModel configured)", false);
+            }
+            request.setModel(defaultModel);
+        }
+    }
+
+    private long effectiveTimeoutMs(ChatRequest request) {
+        Long t = request.getTimeoutMs();
+        return t != null && t > 0 ? t : DEFAULT_TIMEOUT_MS;
+    }
+
+    private ChatResponse mapCompletionJson(JsonNode root) {
+        JsonNode choice0 = root.path("choices").path(0);
+        JsonNode message = choice0.path("message");
+        String content = extractMessageTextContent(message);
+        String reasoning = message.path("reasoning_content").asText(null);
+        if (reasoning != null && reasoning.isEmpty()) {
+            reasoning = null;
+        }
+        List<ToolCall> tools = parseToolCallsFromMessage(message);
+        JsonNode usage = root.path("usage");
+        Integer inTok = usage.has("prompt_tokens") ? usage.get("prompt_tokens").asInt() : null;
+        Integer outTok = usage.has("completion_tokens") ? usage.get("completion_tokens").asInt() : null;
+        return ChatResponse.builder()
+                .id(root.path("id").asText(null))
+                .model(root.path("model").asText(null))
+                .role(message.path("role").asText("assistant"))
+                .content(content.isEmpty() ? null : content)
+                .reasoningContent(reasoning)
+                .toolCalls(tools.isEmpty() ? List.of() : tools)
+                .finishReason(nullIfEmpty(choice0.path("finish_reason").asText(null)))
+                .usageInputTokens(inTok)
+                .usageOutputTokens(outTok)
+                .rawJson(root)
+                .build();
+    }
+
+    private static String nullIfEmpty(String s) {
+        return s == null || s.isEmpty() ? null : s;
+    }
+
+    private static String extractMessageTextContent(JsonNode message) {
+        JsonNode c = message.get("content");
+        if (c == null || c.isNull()) {
+            return "";
+        }
+        if (c.isTextual()) {
+            return c.asText();
+        }
+        if (c.isArray()) {
+            StringBuilder sb = new StringBuilder();
+            for (JsonNode part : c) {
+                if ("text".equals(part.path("type").asText()) && part.has("text")) {
+                    if (!sb.isEmpty()) {
+                        sb.append('\n');
+                    }
+                    sb.append(part.get("text").asText(""));
+                }
+            }
+            return sb.toString();
+        }
+        return "";
+    }
+
+    private List<ToolCall> parseToolCallsFromMessage(JsonNode message) {
+        JsonNode arr = message.get("tool_calls");
+        if (arr == null || !arr.isArray()) {
+            return List.of();
+        }
+        List<ToolCall> out = new ArrayList<>();
+        for (JsonNode tc : arr) {
+            JsonNode fn = tc.get("function");
+            if (fn == null) {
+                continue;
+            }
+            String id = tc.path("id").asText("");
+            String name = fn.path("name").asText("");
+            String argsRaw = fn.path("arguments").asText("{}");
+            out.add(ToolCall.builder()
+                    .id(id)
+                    .name(name)
+                    .argumentsRaw(argsRaw)
+                    .arguments(parseArgumentsNode(argsRaw))
+                    .build());
+        }
+        return out;
+    }
+
+    private JsonNode parseArgumentsNode(String argsRaw) {
+        if (argsRaw == null || argsRaw.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(argsRaw);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private ChatResponse parseSseStream(ResponseBody bodyStream, LlmStreamSink userSink) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(bodyStream.byteStream(), StandardCharsets.UTF_8));
+        StreamAgg agg = new StreamAgg();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (!line.startsWith("data:")) {
+                continue;
+            }
+            String payload = line.substring(5).trim();
+            if (payload.isEmpty() || "[DONE]".equals(payload)) {
+                if ("[DONE]".equals(payload)) {
+                    break;
+                }
+                continue;
+            }
+            JsonNode chunk;
+            try {
+                chunk = objectMapper.readTree(payload);
+            } catch (Exception e) {
+                log.debug("Skip malformed SSE JSON: {}", e.getMessage());
+                continue;
+            }
+            if (chunk.has("error")) {
+                String msg = chunk.path("error").path("message").asText(chunk.toString());
+                if (userSink != null) {
+                    userSink.onError(msg, true);
+                    userSink.onMessageComplete("error");
+                }
+                throw new LlmApiException("stream error: " + msg, false);
+            }
+            if (agg.id == null && chunk.has("id")) {
+                agg.id = chunk.get("id").asText(null);
+            }
+            if (agg.model == null && chunk.has("model")) {
+                agg.model = chunk.get("model").asText(null);
+            }
+            JsonNode choices = chunk.get("choices");
+            if (choices != null && choices.isArray() && !choices.isEmpty()) {
+                JsonNode ch0 = choices.get(0);
+                JsonNode delta = ch0.get("delta");
+                if (delta != null) {
+                    applyDelta(delta, agg, userSink);
+                }
+                String fr = ch0.path("finish_reason").asText(null);
+                if (fr != null && !fr.isEmpty() && !"null".equals(fr)) {
+                    agg.finishReason = fr;
+                }
+            }
+            JsonNode usage = chunk.get("usage");
+            if (usage != null && !usage.isNull()) {
+                int inTok = usage.path("prompt_tokens").asInt(0);
+                int outTok = usage.path("completion_tokens").asInt(0);
+                agg.usageInputTokens = inTok;
+                agg.usageOutputTokens = outTok;
+                if (userSink != null) {
+                    userSink.onUsage(inTok, outTok);
+                }
+            }
+        }
+        List<ToolCall> toolCalls = agg.buildToolCalls(objectMapper);
+        String contentStr = agg.text.length() > 0 ? agg.text.toString() : null;
+        String reasoningStr = agg.reasoning.length() > 0 ? agg.reasoning.toString() : null;
+        ChatResponse response = ChatResponse.builder()
+                .id(agg.id)
+                .model(agg.model)
+                .role("assistant")
+                .content(contentStr)
+                .reasoningContent(reasoningStr)
+                .toolCalls(toolCalls)
+                .finishReason(agg.finishReason != null ? agg.finishReason : "stop")
+                .usageInputTokens(agg.usageInputTokens)
+                .usageOutputTokens(agg.usageOutputTokens)
+                .build();
+        if (userSink != null) {
+            userSink.onMessageComplete(response.getFinishReason() != null ? response.getFinishReason() : "stop");
+        }
+        return response;
+    }
+
+    private void applyDelta(JsonNode delta, StreamAgg agg, LlmStreamSink userSink) {
+        if (delta.has("content") && !delta.get("content").isNull()) {
+            String t = delta.get("content").asText("");
+            if (!t.isEmpty()) {
+                agg.text.append(t);
+                if (userSink != null) {
+                    userSink.onTextDelta(t);
+                }
+            }
+        }
+        if (delta.has("reasoning_content") && delta.get("reasoning_content").isTextual()) {
+            String r = delta.get("reasoning_content").asText("");
+            if (!r.isEmpty()) {
+                agg.reasoning.append(r);
+                if (userSink != null) {
+                    userSink.onReasoningDelta(r);
+                }
+            }
+        }
+        JsonNode tcalls = delta.get("tool_calls");
+        if (tcalls == null || !tcalls.isArray()) {
+            return;
+        }
+        for (JsonNode item : tcalls) {
+            int index = item.path("index").asInt(-1);
+            if (index < 0) {
+                continue;
+            }
+            ToolSlot slot = agg.toolsByIndex.computeIfAbsent(index, k -> new ToolSlot());
+            if (item.has("id") && !item.get("id").isNull()) {
+                String id = item.get("id").asText("");
+                if (!id.isEmpty()) {
+                    slot.id = id;
+                }
+            }
+            JsonNode fn = item.get("function");
+            if (fn != null) {
+                if (fn.has("name") && !fn.get("name").isNull()) {
+                    String name = fn.get("name").asText("");
+                    if (!name.isEmpty()) {
+                        slot.name = name;
+                    }
+                }
+                if (fn.has("arguments")) {
+                    String frag = fn.get("arguments").asText("");
+                    if (!frag.isEmpty()) {
+                        slot.args.append(frag);
+                        if (userSink != null && slot.id != null && !slot.id.isEmpty()) {
+                            userSink.onToolCallArgumentsDelta(slot.id, frag);
+                        }
+                    }
+                }
+            }
+            tryFireToolStart(slot, userSink);
+        }
+    }
+
+    private static void tryFireToolStart(ToolSlot slot, LlmStreamSink userSink) {
+        if (slot.started || userSink == null || slot.id == null || slot.id.isEmpty()
+                || slot.name == null || slot.name.isEmpty()) {
+            return;
+        }
+        userSink.onToolCallStart(slot.id, slot.name);
+        slot.started = true;
+    }
+
+    private static final class StreamAgg {
+        String id;
+        String model;
+        final StringBuilder text = new StringBuilder();
+        final StringBuilder reasoning = new StringBuilder();
+        final TreeMap<Integer, ToolSlot> toolsByIndex = new TreeMap<>();
+        String finishReason;
+        Integer usageInputTokens;
+        Integer usageOutputTokens;
+
+        List<ToolCall> buildToolCalls(ObjectMapper mapper) {
+            List<ToolCall> list = new ArrayList<>();
+            for (Map.Entry<Integer, ToolSlot> e : toolsByIndex.entrySet()) {
+                ToolSlot s = e.getValue();
+                if (s.id == null || s.id.isEmpty()) {
+                    continue;
+                }
+                String raw = s.args.toString();
+                JsonNode argsNode = null;
+                if (!raw.isBlank()) {
+                    try {
+                        argsNode = mapper.readTree(raw);
+                    } catch (Exception ignored) {
+                    }
+                }
+                list.add(ToolCall.builder()
+                        .id(s.id)
+                        .name(s.name != null ? s.name : "")
+                        .argumentsRaw(raw.isEmpty() ? "{}" : raw)
+                        .arguments(argsNode)
+                        .build());
+            }
+            return list;
+        }
+    }
+
+    private static final class ToolSlot {
+        String id;
+        String name;
+        final StringBuilder args = new StringBuilder();
+        boolean started;
     }
 }

@@ -36,7 +36,9 @@ public record LlmProvidersProperties(
             String apiKey,
             String baseUrl,
             String defaultModel,
-            @DefaultValue List<String> models
+            @DefaultValue List<String> models,
+            /** {@code openai}：Chat Completions；{@code anthropic}：Messages API */
+            @DefaultValue("openai") String protocol
     ) {
         /** 检查配置是否有效（至少有 API Key 和 Base URL） */
         public boolean isValid() {
