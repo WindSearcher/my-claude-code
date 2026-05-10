@@ -1,0 +1,229 @@
+# AI Code Assistant Backend
+server:
+  port: 8080
+
+#spring:
+#  application:
+#    name: ai-code-assistant
+#  threads:
+#    virtual:
+#      enabled: true
+#  web:
+#    resources:
+#      static-locations: ${SPRING_WEB_RESOURCES_STATIC_LOCATIONS:classpath:/static/}
+#  jackson:
+#    serialization:
+#      write-dates-as-timestamps: false
+#    default-property-inclusion: non_null
+#
+## Python 服务配置
+#python:
+#  service:
+#    host: 127.0.0.1
+#    port: 8000
+#    health-check-interval: 30000
+#
+## LLM 配置
+## 支持 OpenAI 兼容提供商（阿里云百炼/DeepSeek/Moonshot/本地 Ollama 等）和原生 Anthropic
+## 切换提供商只需修改下方 3 个变量（或对应环境变量）
+#llm:
+#  provider: openai
+#  # ===== 多 Provider 配置（推荐）=====
+#  # 支持同时接入多个 LLM 服务商，前端可自由切换
+#  providers:
+#    dashscope:
+#      api-key: ${LLM_PROVIDER_DASHSCOPE_API_KEY:}
+#      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+#      default-model: qwen3.6-max-preview
+#      models: ${LLM_PROVIDER_DASHSCOPE_MODELS:qwen3.6-max-preview,qwen3.6-plus}
+#    deepseek:
+#      api-key: ${LLM_PROVIDER_DEEPSEEK_API_KEY:}
+#      base-url: https://api.deepseek.com/v1
+#      default-model: deepseek-v4-pro
+#      models: ${LLM_PROVIDER_DEEPSEEK_MODELS:deepseek-v4-pro,deepseek-v4-flash}
+#    moonshot:
+#      api-key: ${LLM_PROVIDER_MOONSHOT_API_KEY:}
+#      base-url: https://api.moonshot.cn/v1
+#      default-model: kimi-k2.6
+#      models: ${LLM_PROVIDER_MOONSHOT_MODELS:kimi-k2.6,moonshot-v1-auto}
+#  # ===== 单 Provider 配置（向后兼容）=====
+#  # 如果 llm.providers 为空，回退到此配置
+#  openai:
+#    # API Key — 从环境变量读取，禁止硬编码
+#    api-key: ${LLM_API_KEY:your-api-key-here}
+#    # 基础 URL — 支持的提供商示例:
+#    #   阿里云百炼:  https://dashscope.aliyuncs.com/compatible-mode/v1
+#    #   OpenAI:       https://api.openai.com/v1
+#    #   DeepSeek:     https://api.deepseek.com/v1
+#    #   Moonshot:     https://api.moonshot.cn/v1
+#    #   本地 Ollama:   http://localhost:11434/v1
+#    #   Azure OpenAI: https://{resource}.openai.azure.com/openai/deployments/{deployment}/v1
+#    base-url: ${LLM_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+#    # 默认模型（各提供商模型名不同，请配合 base-url 设置）
+#    default-model: ${LLM_DEFAULT_MODEL:qwen3.6-max-preview}
+#    # 支持的模型列表（逗号分隔）
+#    models: ${LLM_MODELS:qwen3.6-max-preview,qwen3.6-plus,qwen-max,qwen-plus,qwen-turbo,qwen-coder-plus}
+#  http:
+#    pool:
+#      max-idle-connections: 5
+#      keep-alive-seconds: 30
+#    connect-timeout-seconds: 10
+#    write-timeout-seconds: 10
+#    retry-on-failure: true
+#
+## 子代理模型别名映射
+## 模型层级别名 → 实际部署模型（可通过环境变量 AGENT_MODEL_<ALIAS> 覆盖）
+#agent:
+#  loop:
+#    prompt-too-long-withhold: true
+#    media-recovery: true
+#  model-aliases:
+#    light: qwen-plus
+#    standard: qwen3.6-plus
+#    premium: qwen3.6-max-preview
+#
+## 分类器模型配置（留空则按四级回退: env → 此配置 → lightweight → default）
+#classifier:
+#  model: ""
+#
+## 特性标志
+#features:
+#  flags:
+#    THINKING_MODE: false
+#    TOOL_SEARCH: false
+#    SANDBOX_DEFAULT_ON: false
+#    CLASSIFIER_V2: false
+#    ENABLE_AGENT_SWARMS: true
+#    MCP_SKILLS: false
+#    COORDINATOR_MODE: true
+#    # ── A 组：SystemPrompt 动态段 ──
+#    TOKEN_BUDGET: false          # A1: 默认关闭，用户指定 token 目标时手动开启
+#    SCRATCHPAD: true              # A3: 必须默认开启，否则已有功能回退
+#    CACHED_MICROCOMPACT: true     # A4: FRC 总开关
+#    FRC_SUPPORTED_MODELS: "haiku,sonnet"  # A4: FRC 支持的模型模式
+#    FRC_KEEP_RECENT: 3            # A4: FRC 保留最近 N 条工具结果
+#    # ── B 组：P2 实验性工具 ──
+#    AGENT_TRIGGERS: false         # B2: CronTool 门控，默认关闭
+#    WEB_BROWSER_TOOL: true        # B3: WebBrowserTool 门控，测试启用
+#    GIT_ENHANCED_TOOL: ${GIT_ENHANCED_TOOL:true}   # B4: GitTool 门控，默认开启（只读工具）
+#    CODE_INTEL_TOOL: ${CODE_INTEL_TOOL:true}       # B6: CodeIntelTool 门控，默认开启（只读工具）
+#    RESOURCE_MONITOR: ${RESOURCE_MONITOR:false}    # B5: MonitorTool 门控，默认关闭
+#
+## MCP 配置
+#mcp:
+#  capability-registry-path: ${MCP_REGISTRY_PATH:${user.dir}/../configuration/mcp/mcp_capability_registry.json}
+#  servers: {}
+#    # 智谱 WebSearch MCP (通过阿里云百炼) - 默认禁用，如需启用请配置 LLM_PROVIDER_DASHSCOPE_API_KEY 后取消下方注释
+#    # zhipu-websearch:
+#    #   type: SSE
+#    #   url: https://dashscope.aliyuncs.com/api/v1/mcps/zhipu-websearch/sse
+#    #   headers:
+#    #     Authorization: Bearer ${LLM_PROVIDER_DASHSCOPE_API_KEY:${LLM_API_KEY:your-api-key-here}}
+#    #   scope: USER
+#
+## 沙箱配置
+#sandbox:
+#  enabled: true
+#  image: ai-code-assistant-sandbox:latest
+#  timeout-seconds: 300
+#  memory-limit: 512m
+#  network-enabled: false
+#  mount-mode: ro
+#
+## 安全增强配置
+#security:
+#  enhanced-blacklist:
+#    enabled: true
+#    custom-config: security-blacklist.json
+#    audit-log-enabled: true
+#
+## SpringDoc OpenAPI
+#springdoc:
+#  api-docs:
+#    path: /v3/api-docs
+#    enabled: true
+#  swagger-ui:
+#    path: /swagger-ui.html
+#    enabled: true
+#    tags-sorter: alpha
+#    operations-sorter: alpha
+#  show-actuator: false
+#  default-produces-media-type: application/json
+
+# 日志配置 — 详细配置见 log4j2.xml
+# Log4j2 由 spring-boot-starter-log4j2 自动加载 classpath:log4j2.xml
+logging:
+  config: classpath:log4j2.xml
+
+# 应用配置
+#app:
+#  security:
+#    path-validation:
+#      enabled: true
+#      project-boundary-check: true
+#      symlink-resolution: true
+#  memory:
+#    team-memories-enabled: true
+#    max-age-days: 90
+#    auto-purge: true
+#    rerank-enabled: true
+#    rerank-timeout-ms: 3000
+#  compact:
+#    session-memory-compact-enabled: true
+#    smc-min-tokens: 10000
+#    smc-max-tokens: 40000
+#  settings:
+#    watch-enabled: true
+#    watch-interval-ms: 5000
+#  mcp:
+#    channel-permissions-enabled: true
+#    health-check-interval-ms: 30000
+#    max-reconnect-attempts: 5
+#  bridge:
+#    enabled: true
+#    max-sessions: 5
+#    session-timeout-hours: 24
+#  model:
+#    # 默认模型（千问示例）
+#    default: qwen3.6-max-preview
+#    # 降级链 — 按性能从高到低
+#    tier-chain:
+#      - qwen3.6-max-preview
+#      - qwen3.6-plus
+#      - qwen-plus
+#      - qwen-turbo
+#    # 降级时是否自动剥离 thinking blocks
+#    strip-thinking-on-downgrade: true
+#
+#context:
+#  cascade:
+#    incremental-collapse:
+#      enabled: true
+#      segment-turns: 10
+#      session-timeout-minutes: 30
+#
+## v1.5 差异化升级项 C — 自动路由 Beta（默认关闭）
+## 开启后 QueryEngine 每轮在 onTurnStart 之后调用 VisualizationAutoRouter
+## 三道闸门（开关 / 关键词 + 工具执行 / SHA256 缓存）通过后，调 fast-model 分类器决策视图。
+#visualization:
+#  auto-routing:
+#    enabled: false
+#
+## Admin 配置
+#admin:
+#  # Admin 密码 — 从环境变量读取，默认空（未配置则 admin 功能禁用）
+#  password: ${ADMIN_PASSWORD:}
+#
+## Spring Actuator 监控
+#management:
+#  endpoints:
+#    web:
+#      exposure:
+#        include: health,metrics,info,prometheus
+#      base-path: /actuator
+#  endpoint:
+#    health:
+#      show-details: always
+#  metrics:
+#    tags:
+#      application: zhikuncode

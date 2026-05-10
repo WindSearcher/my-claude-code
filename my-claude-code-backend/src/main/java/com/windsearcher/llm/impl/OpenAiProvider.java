@@ -12,6 +12,7 @@ import com.windsearcher.exception.LlmApiException;
 import com.windsearcher.llm.LlmProvider;
 import com.windsearcher.llm.LlmStreamSink;
 import com.windsearcher.llm.protocol.openai.OpenAiChatRequestFactory;
+import com.windsearcher.llm.util.UsageParser;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 
@@ -79,8 +80,12 @@ public class OpenAiProvider implements LlmProvider {
     @Override
     public ChatResponse streamChat(ChatRequest request) {
         ensureModel(request);
+
+        // 1. 构建流式请求体
         ObjectNode body = OpenAiChatRequestFactory.build(objectMapper, request);
         long timeoutMs = effectiveTimeoutMs(request);
+
+        // 2. 构建带超时的 OkHttpClient（共享连接池，线程安全）
         OkHttpClient client = httpClient.newBuilder()
                 .callTimeout(Duration.ofMillis(timeoutMs))
                 .readTimeout(Duration.ofMillis(timeoutMs))
@@ -92,6 +97,8 @@ public class OpenAiProvider implements LlmProvider {
                 .post(RequestBody.create(body.toString(), JSON_MEDIA))
                 .build();
         LlmStreamSink userSink = request.getStreamSink();
+
+        // 3. 执行请求
         try (Response response = client.newCall(httpRequest).execute()) {
             if (!response.isSuccessful()) {
                 String err = response.body() != null ? response.body().string() : "";
@@ -341,18 +348,28 @@ public class OpenAiProvider implements LlmProvider {
     private ChatResponse parseSseStream(ResponseBody bodyStream, LlmStreamSink userSink) throws IOException {
         BufferedReader reader = new BufferedReader(new InputStreamReader(bodyStream.byteStream(), StandardCharsets.UTF_8));
         StreamAgg agg = new StreamAgg();
+
+        // 逐行解析 SSE 流
         String line;
         while ((line = reader.readLine()) != null) {
+            log.info("OpenAiProvider streamChat line={}",line);
+            if (line.isEmpty()) continue;
+
             if (!line.startsWith("data:")) {
                 continue;
             }
             String payload = line.substring(5).trim();
-            if (payload.isEmpty() || "[DONE]".equals(payload)) {
-                if ("[DONE]".equals(payload)) {
-                    break;
-                }
-                continue;
+
+            // 流式回复结束
+            if ("data: [DONE]".equals(line)) {
+                break ;
             }
+//            if (payload.isEmpty() || "[DONE]".equals(payload)) {
+//                if ("[DONE]".equals(payload)) {
+//                    break;
+//                }
+//                continue;
+//            }
             JsonNode chunk;
             try {
                 chunk = objectMapper.readTree(payload);
@@ -387,13 +404,15 @@ public class OpenAiProvider implements LlmProvider {
                 }
             }
             JsonNode usage = chunk.get("usage");
-            if (usage != null && !usage.isNull()) {
-                agg.tokenUsage = parseUsage(usage);
-                if (agg.tokenUsage != null && userSink != null) {
-                    int inTok = agg.tokenUsage.getPromptTokens() != null ? agg.tokenUsage.getPromptTokens() : 0;
-                    int outTok = agg.tokenUsage.getCompletionTokens() != null ? agg.tokenUsage.getCompletionTokens() : 0;
-                    userSink.onUsage(inTok, outTok);
-                }
+            if (usage != null) {
+                TokenUsage tokenUsage = parseUsage(usage);
+                agg.tokenUsage = tokenUsage;
+//                agg.tokenUsage = UsageParser.parseUsage(usage);
+//                if (agg.tokenUsage != null && userSink != null) {
+//                    int inTok = agg.tokenUsage.getPromptTokens() != null ? agg.tokenUsage.getPromptTokens() : 0;
+//                    int outTok = agg.tokenUsage.getCompletionTokens() != null ? agg.tokenUsage.getCompletionTokens() : 0;
+//                    userSink.onUsage(inTok, outTok);
+//                }
             }
         }
         List<ToolCall> toolCalls = agg.buildToolCalls(objectMapper);
@@ -412,6 +431,8 @@ public class OpenAiProvider implements LlmProvider {
         if (userSink != null) {
             userSink.onMessageComplete(response.getFinishReason() != null ? response.getFinishReason() : "stop");
         }
+
+        log.info("OpenAiProvider streamChat chatResponse={}", JSONObject.toJSONString(response));
         return response;
     }
 
