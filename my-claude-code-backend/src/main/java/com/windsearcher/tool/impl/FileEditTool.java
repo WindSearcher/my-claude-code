@@ -33,17 +33,12 @@ public class FileEditTool implements BaseTool {
 
     private static final long MAX_EDIT_FILE_SIZE = 1024L * 1024 * 1024; // 1GB
 
-    private final FileHistoryService fileHistoryService;
-    private final PathSecurityService pathSecurity;
-    private final SessionManager sessionManager;
-    private final KeyFileTracker keyFileTracker;
 
-    public FileEditTool(FileHistoryService fileHistoryService, PathSecurityService pathSecurity,
-                        SessionManager sessionManager, KeyFileTracker keyFileTracker) {
-        this.fileHistoryService = fileHistoryService;
+    private final PathSecurityService pathSecurity;
+
+
+    public FileEditTool(PathSecurityService pathSecurity) {
         this.pathSecurity = pathSecurity;
-        this.sessionManager = sessionManager;
-        this.keyFileTracker = keyFileTracker;
     }
 
     @Override
