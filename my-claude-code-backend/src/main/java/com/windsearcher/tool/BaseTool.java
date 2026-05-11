@@ -25,6 +25,7 @@ public interface BaseTool {
     String getDescription();
 
     /** 输入参数的 JSON Schema — 给 LLM 的 function calling 描述 */
+    /**TODO.优化，Object可以抽象为一个真正的工具入参对象**/
     Map<String, Object> getInputSchema();
 
     /**
