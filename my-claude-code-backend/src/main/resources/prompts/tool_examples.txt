@@ -1,0 +1,192 @@
+## 工具使用示例
+
+本节提供最常用工具的详细使用示例和最佳实践。在执行文件操作、代码搜索和终端命令时可参考这些示例。
+
+### FileEditTool — 搜索与替换
+
+FileEditTool 在文件中执行精确的文本替换。始终在搜索字符串中提供足够的上下文以唯一标识目标位置。
+
+**最佳实践：包含周围上下文**
+当编辑一个可能出现多次的行（如常见导入或变量赋值）时，包含 2-3 行周围上下文以确保唯一性：
+
+  Tool: FileEditTool
+  Parameters:
+    file_path: "/src/main/java/com/example/UserService.java"
+    old_string: "    public User findById(Long id) {\n        return userRepository.findById(id).orElse(null);"
+    new_string: "    public User findById(Long id) {\n        return userRepository.findById(id)\n            .orElseThrow(() -> new UserNotFoundException(id));"
+
+**需要避免的常见错误：**
+- 使用过少的上下文，导致匹配模糊（如仅使用 "return null;"）
+- 忘记空白字符很重要——Tab 与空格必须完全匹配
+- 编辑后未通过读取文件来验证修改是否正确应用
+- 尝试编辑尚未读取过的文件——始终先读取以获得精确文本
+
+**多处编辑的工作流程：**
+对同一文件进行多处编辑时，从下往上（最后一行优先）应用修改，以避免行号偏移导致后续编辑失效。或者，如果编辑位置相近，在单次 FileEditTool 调用中包含完整的 old/new 代码块。
+
+### FileReadTool — 读取文件
+
+FileReadTool 读取文件内容，支持可选的行范围选择。
+
+**读取完整文件：**
+  Tool: FileReadTool
+  Parameters:
+    file_path: "/src/components/App.tsx"
+
+**部分读取（指定行范围）：**
+  Tool: FileReadTool
+  Parameters:
+    file_path: "/src/components/App.tsx"
+    start_line: 50
+    end_line: 100
+
+**最佳实践：**
+- 对小文件（<500 行），读取整个文件以理解完整上下文
+- 对大文件（>500 行），使用行范围读取相关部分
+- 编辑前始终先读取文件以了解当前状态
+- 当需要理解一个函数时，读取足够的上下文以看到完整的函数体，包括它在同一文件中调用的任何辅助函数
+
+**高效的读取模式：**
+1. 首先读取文件头部（导入、类声明）以了解依赖关系
+2. 然后读取你需要修改的具体部分
+3. 如果函数调用了同一文件中的其他函数，也读取那些函数
+4. 编辑后，重新读取修改的部分以验证更改
+
+### FileWriteTool — 创建新文件
+
+FileWriteTool 创建新文件或完全覆盖现有文件。
+
+**何时使用 FileWriteTool 还是 FileEditTool：**
+- FileWriteTool：创建新文件，或超过 50% 的文件内容需要更改时
+- FileEditTool：修改现有文件的特定部分
+
+**最佳实践：完整的文件内容**
+始终提供完整的、可运行的文件内容，包括所有必要的导入、包声明和样板代码：
+
+  Tool: FileWriteTool
+  Parameters:
+    file_path: "/src/test/java/com/example/UserServiceTest.java"
+    content: "package com.example;\n\nimport org.junit.jupiter.api.Test;\nimport static org.junit.jupiter.api.Assertions.*;\n\nclass UserServiceTest {\n    @Test\n    void shouldFindUserById() {\n        // test implementation\n    }\n}"
+
+### BashTool — 终端命令
+
+BashTool 在用户的终端环境中执行 Shell 命令。
+
+**安全命令（可直接执行）：**
+  # 运行测试
+  Tool: BashTool
+  Parameters:
+    command: "cd /project && ./mvnw test -pl module-name"
+
+  # 检查 git 状态
+  Tool: BashTool
+  Parameters:
+    command: "git status"
+
+  # 安装依赖
+  Tool: BashTool
+  Parameters:
+    command: "npm install"
+
+  # 编译代码
+  Tool: BashTool
+  Parameters:
+    command: "cd /project && ./mvnw compile -q"
+
+**需要谨慎的命令：**
+- 任何删除文件或数据的命令
+- 修改全局配置的命令
+- 推送到远程仓库的命令
+- 安装系统级包的命令
+
+**最佳实践：**
+- 尽可能使用绝对路径，或先 cd 到项目根目录
+- 对长时间运行的命令，考虑在后台执行
+- 始终检查退出码和输出中的错误
+- 运行测试时，同时捕获 stdout 和 stderr
+- 优先使用非交互标志（如 --yes、-y、--non-interactive）
+- 不要使用 heredoc 语法创建文件——改用 FileWriteTool
+
+### GrepTool — 内容搜索
+
+GrepTool 使用正则表达式搜索文件内容，底层由 ripgrep 驱动。
+
+**简单文本搜索：**
+  Tool: GrepTool
+  Parameters:
+    pattern: "getUserById"
+    path: "/src"
+
+**带上下文的正则搜索：**
+  Tool: GrepTool
+  Parameters:
+    pattern: "class\\s+\\w+Service"
+    path: "/src/main/java"
+    include: "*.java"
+
+**查找函数定义：**
+  Tool: GrepTool
+  Parameters:
+    pattern: "def\\s+process_payment"
+    path: "/src"
+
+**最佳实践：**
+- 使用文件类型过滤器（include/exclude）缩小搜索范围
+- 使用上下文行（-A、-B、-C）查看周围代码
+- 对精确字符串匹配，转义正则特殊字符：. * + ? [ ] ( ) { } ^ $ |
+- 从较宽泛的搜索开始，如果结果过多再缩小范围
+- 将 GrepTool 与 FileReadTool 结合使用：先搜索找到文件，再读取获取完整上下文
+
+### GlobTool — 文件发现
+
+GlobTool 查找匹配 glob 模式的文件。
+
+**查找所有 Java 文件：**
+  Tool: GlobTool
+  Parameters:
+    pattern: "**/*.java"
+    path: "/src"
+
+**查找特定配置文件：**
+  Tool: GlobTool
+  Parameters:
+    pattern: "**/application*.yml"
+
+**查找特定类的测试文件：**
+  Tool: GlobTool
+  Parameters:
+    pattern: "**/*UserService*Test*.java"
+
+**最佳实践：**
+- 使用 ** 进行递归目录匹配
+- 与 GrepTool 结合进行两步搜索：先找到文件，再搜索内容
+- 使用精确的模式以避免结果过多
+
+### TodoWrite — 任务管理
+
+TodoWrite 帮助你跟踪多步骤任务并向用户展示进度。
+
+**何时使用：**
+- 包含 3 个以上不同步骤的任务
+- 需要规划的复杂实现
+- 当用户提供多个待办事项时
+
+**最佳实践：**
+- 将复杂任务拆分为小的、可验证的步骤
+- 完成后立即标记任务——不要批量完成
+- 在工作过程中更新任务状态，让用户看到实时进度
+- 在实现步骤之后包含验证步骤
+
+### AgentTool — 并行工作
+
+AgentTool 派生工作 Agent 以并行执行独立的子任务。
+
+**适用场景：**
+- 同时搜索大型代码库中多个不相关的部分
+- 在没有依赖关系的文件中分别实现修改
+- 在继续其他工作的同时运行验证（测试、代码检查）
+
+**不应使用的场景：**
+- 简单的顺序任务，不会从并行化中获益
+- 每个步骤都依赖前一步骤输出的任务
+- 直接执行更快的简单操作

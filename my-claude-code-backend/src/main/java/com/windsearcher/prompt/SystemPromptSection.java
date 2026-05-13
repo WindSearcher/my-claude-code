@@ -1,0 +1,97 @@
+package com.windsearcher.prompt;
+
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.function.Supplier;
+
+/**
+ * 系统提示段抽象，支持两种类型：
+ * 记忆化段：首次计算后缓存，跨轮次复用
+ * 易变段：每轮重算，但仅在内容变化时才实际破坏缓存
+ */
+public interface SystemPromptSection {
+
+    /**
+     * 段名称 — 用于缓存键和调试
+     */
+    String name();
+
+    /**
+     * 计算段内容 — 延迟执行
+     */
+    Supplier<String> compute();
+
+    /**
+     * 是否破坏缓存 — true 表示每次都需要重新计算
+     */
+    boolean cacheBreak();
+
+    /**
+     * 段描述 — 用于调试和日志
+     */
+    default String description() {
+        return name();
+    }
+
+}
+
+
+/**
+ * 记忆化段 — 首次计算后缓存，跨轮次复用。
+ * <p>
+ * 适用于内容相对稳定但计算成本较高的段，如：
+ * - session_guidance: 基于工具集的会话引导
+ * - memory: PROJECT.md 记忆加载
+ * - env_info: 环境信息（模型、OS、工作目录等）
+ */
+record MemoizedSection(String name, Supplier<String> compute) implements SystemPromptSection {
+
+    @Override
+    public boolean cacheBreak() {
+        return false;
+    }
+
+    public MemoizedSection(String name, Supplier<String> compute, String description) {
+        this(name, compute);
+    }
+}
+
+/**
+ * 易变段 — 每轮重算，但仅在内容变化时才实际破坏缓存。
+ * <p>
+ * 适用于内容可能频繁变化的段，如：
+ * - mcp_instructions: MCP 服务器连接状态可能在轮次间变化
+ */
+record UncachedSection(String name, Supplier<String> compute, String reason) implements SystemPromptSection {
+
+    @Override
+    public boolean cacheBreak() {
+        return true;
+    }
+
+    @Override
+    public String description() {
+        return name + " (" + reason + ")";
+    }
+}
+
+/**
+ * 全局记忆化段 — 不依赖会话，跨 session 共享缓存。
+ * <p>
+ * 适用于内容跨会话不变的段，如：
+ * - language: 语言偏好
+ * - token_budget: 功能开关控制
+ * - ant_specific_guidance: 内部用户指导
+ */
+record GlobalMemoizedSection(String name, Supplier<String> compute) implements SystemPromptSection {
+
+    @Override
+    public boolean cacheBreak() {
+        return false;
+    }
+}

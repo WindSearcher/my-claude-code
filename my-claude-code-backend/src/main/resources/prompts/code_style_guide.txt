@@ -1,0 +1,160 @@
+## 代码风格指南
+
+编写或修改代码时，始终匹配项目的现有风格。以下准则在项目没有明确约定时作为默认规范。
+
+### 通用原则
+
+**一致性优于个人偏好：**
+- 匹配现有代码库的约定——缩进、命名、格式
+- 如果项目使用 Tab，就用 Tab。如果使用 2 空格缩进，就用 2 空格缩进
+- 如果项目使用单引号表示字符串，遵循该约定。双引号同理
+- 不要将你偏好的风格强加于现有代码库
+
+**最小化修改：**
+- 只修改与任务直接相关的代码
+- 不要重新格式化周围的代码，即使它不符合你的风格偏好
+- 不要给你未修改的代码添加类型注解、文档字符串或注释
+- 不要重命名变量或重构不属于当前任务的代码
+
+**可读性优于技巧性：**
+- 优先选择直白易读的代码，而非精巧的单行代码
+- 使用能揭示意图的描述性变量名
+- 保持函数专注——每个函数只做好一件事
+- 优先选择显式代码而非隐式魔法
+
+### Java 代码风格
+
+**命名约定：**
+- 类名：PascalCase（如 `UserService`、`OrderRepository`）
+- 方法名：camelCase（如 `findById`、`calculateTotal`）
+- 常量：UPPER_SNAKE_CASE（如 `MAX_RETRY_COUNT`、`DEFAULT_TIMEOUT`）
+- 包名：小写点分隔（如 `com.example.service`）
+- 局部变量：camelCase，具有描述性（如 `userCount` 而非 `uc`）
+- 布尔方法：使用 is/has/can/should 前缀（如 `isValid()`、`hasPermission()`）
+
+**结构：**
+- 每个文件一个类（内部类除外）
+- 导入顺序：java.*、javax.*、org.*、com.*，然后是项目特定的
+- 避免通配符导入（import java.util.*）——使用显式导入
+- 方法尽量保持在 30 行以内；提取辅助方法以提高清晰度
+- 优先使用组合而非继承
+- 使用 Optional 代替方法返回 null
+- 对 AutoCloseable 资源使用 try-with-resources
+
+**现代 Java（11+）惯用法：**
+- 当右侧类型明显时，对局部变量使用 var
+- 使用文本块（"""）处理多行字符串
+- 使用 record 类型作为不可变数据载体
+- 当实现集合固定时使用密封类/接口
+- 集合转换优先使用 Stream API，但复杂逻辑使用传统循环
+- 在适当场景使用 switch 表达式
+
+### Python 代码风格
+
+**命名约定：**
+- 函数和变量：snake_case（如 `find_user_by_id`、`total_count`）
+- 类名：PascalCase（如 `UserService`、`DataProcessor`）
+- 常量：UPPER_SNAKE_CASE（如 `MAX_RETRIES`、`API_BASE_URL`）
+- 私有成员：下划线前缀（如 `_internal_state`）
+- 模块名：简短、小写（如 `utils`、`config`）
+
+**结构：**
+- 以 PEP 8 指南作为基础规范
+- 对函数签名使用类型提示：def process(data: list[str]) -> bool:
+- 优先使用 f-string 而非 .format() 或 % 格式化
+- 使用 dataclasses 或 NamedTuple 处理结构化数据
+- 使用上下文管理器（with 语句）管理资源
+- 函数尽量保持在 25 行以内
+- 简单转换使用列表/字典/集合推导式
+- 避免可变的默认参数（使用 None 配合内部默认值）
+
+**导入组织：**
+1. 标准库导入
+2. 第三方库导入
+3. 本地/项目导入
+每组之间用空行分隔，组内按字母顺序排列
+
+### JavaScript/TypeScript 代码风格
+
+**命名约定：**
+- 变量和函数：camelCase（如 `getUserName`、`itemCount`）
+- 类和接口：PascalCase（如 `UserService`、`ApiResponse`）
+- 常量：UPPER_SNAKE_CASE 或 camelCase，取决于项目约定
+- React 组件：PascalCase（如 `UserProfile`、`NavigationBar`）
+- 文件名：匹配导出——组件用 PascalCase，工具函数用 camelCase
+- CSS 类名：kebab-case 或 camelCase，取决于项目（CSS modules 还是普通 CSS）
+
+**TypeScript 特定：**
+- 对象形状优先使用 interfaces 而非 type aliases
+- 使用严格模式——除非绝对必要，避免使用 any 类型
+- 在适当场景优先使用联合类型和可辨识联合而非枚举
+- 对字面量类型使用 const 断言
+- 使用泛型类型构建可复用的工具类型
+- 避免类型断言（as）——优先使用类型守卫和类型收窄
+
+**现代模式：**
+- 使用 const/let，永不使用 var
+- 回调和简短函数优先使用箭头函数
+- 使用 async/await 代替 .then() 链
+- 当能提升可读性时解构对象和数组
+- 使用可选链（?.）和空值合并（??）运算符
+- 使用模板字面量进行字符串插值
+
+**React 特定：**
+- 优先使用带 Hooks 的函数组件而非类组件
+- 保持组件专注——当组件超过 150 行时提取子组件
+- 使用自定义 Hooks 提取可复用的状态逻辑
+- 优先使用受控组件而非非受控组件
+- 仅在性能分析显示确实需要时才使用 React.memo()
+- 事件处理函数使用 handle* 前缀命名（如 handleClick、handleSubmit）
+
+### Go 代码风格
+
+**命名约定：**
+- 导出名称：PascalCase（如 `NewUserService`、`ProcessOrder`）
+- 非导出名称：camelCase（如 `findById`、`internalState`）
+- 接口：按行为命名，通常使用 -er 后缀（如 `Reader`、`Validator`）
+- 包名：简短、小写、尽可能使用单个词（如 `user`、`config`）
+- 缩写词：全大写（如 `HTTPClient`、`UserID`、`HTMLURL`）
+
+**结构：**
+- 遵循 Effective Go 和 Go Code Review Comments 指南
+- 显式处理错误——不要忽略返回的错误
+- 优先返回错误而非 panic
+- 使用 fmt.Errorf 配合 %w 进行错误包装
+- 保持接口精简——尽可能只有一到两个方法
+- 接受接口，返回结构体
+- 对可能阻塞的函数使用 context.Context 作为第一个参数
+- 将相关功能组织到包中；避免单体包
+
+### SQL 代码风格
+
+**格式化：**
+- 关键字使用大写（SELECT、FROM、WHERE、JOIN、ORDER BY）
+- 表名和列名使用小写或 snake_case
+- 每个主要子句独占一行
+- 缩进子子句和条件
+- 使用有意义的表别名（如 u 代表 users，o 代表 orders）
+
+**最佳实践：**
+- 始终使用参数化查询——切勿将用户输入拼接到 SQL 中
+- 优先使用显式列列表而非 SELECT *
+- 为频繁查询的列使用适当的索引
+- 当两者产生相同结果时，优先使用 JOIN 而非子查询
+- 为复杂查询添加注释以解释业务逻辑
+
+### 注释与文档
+
+**何时添加注释：**
+- 代码中不明显的隐含约束或不变量
+- 针对已知 Bug 或平台限制的变通方案
+- 性能关键的决策（为什么选择这个算法而非那个）
+- 无法进一步简化的复杂业务规则
+- TODO/FIXME 并附上清晰的需要修改的描述
+
+**何时不需要注释：**
+- 代码做了什么（代码本身应该是自解释的）
+- 变更日志条目（"为功能 Y 添加了 X"——使用 git 历史）
+- 被注释掉的代码（删除它；git 保存了历史）
+- 重述函数名或参数名
+- 从代码结构即可看出的简单操作
