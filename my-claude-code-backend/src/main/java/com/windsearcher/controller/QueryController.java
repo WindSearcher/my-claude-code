@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,9 +61,9 @@ public class QueryController {
 
         // 3.准备系统提示词
         SystemPromptConfig promptConfig = SystemPromptConfig.builder().build();
-        systemPromptBuilder
-
-        String systemPrompt = null;
+        String systemPrompt = systemPromptBuilder.buildEffectiveSystemPrompt(
+                promptConfig, tools, request.getModel(), Path.of(System.getProperty("user.dir"))
+        );
 
         // 4.组装用户消息
         String userMessage = request.getUserMessage();
@@ -74,6 +75,8 @@ public class QueryController {
         }
 
         // 6.
+
+        return null;
     }
 
     private List<BaseTool> assembleToolPool(QueryRequest request) {
