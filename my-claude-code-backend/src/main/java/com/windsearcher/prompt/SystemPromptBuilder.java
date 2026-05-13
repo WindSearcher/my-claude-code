@@ -46,7 +46,8 @@ public class SystemPromptBuilder {
 
     /**
      * 缓存分割标记 — 分隔静态内容和动态内容。
-     * 标记之前的内容可使用 scope: 'global' 跨组织缓存。
+     * 标记之前的内容可使用 scope: 'global' 跨组织缓存，
+     * 严格让可缓存段排在SYSTEM_PROMPT_DYNAMIC_BOUNDARY之前
      * 标记之后的内容包含用户/会话特定信息，不应全局缓存。
      */
     public static final String SYSTEM_PROMPT_DYNAMIC_BOUNDARY =
@@ -183,21 +184,22 @@ public class SystemPromptBuilder {
      * @return 模板内容，或空字符串
      */
     private String loadPromptTemplate(String templateName) {
-        return promptTemplateCache.computeIfAbsent(templateName, name -> {
-            String resourcePath = "/prompts/" + name + ".txt";
-            try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
-                if (is == null) {
-                    log.warn("Prompt template not found: {}", resourcePath);
-                    return "";
-                }
-                String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                log.debug("Loaded prompt template: {} ({} chars)", name, content.length());
-                return content;
-            } catch (IOException e) {
-                log.warn("Failed to load prompt template: {}", resourcePath, e);
-                return "";
-            }
-        });
+//        return promptTemplateCache.computeIfAbsent(templateName, name -> {
+//            String resourcePath = "/prompts/" + name + ".txt";
+//            try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
+//                if (is == null) {
+//                    log.warn("Prompt template not found: {}", resourcePath);
+//                    return "";
+//                }
+//                String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+//                log.debug("Loaded prompt template: {} ({} chars)", name, content.length());
+//                return content;
+//            } catch (IOException e) {
+//                log.warn("Failed to load prompt template: {}", resourcePath, e);
+//                return "";
+//            }
+//        });
+        return null;
     }
 
     /**
@@ -720,9 +722,9 @@ public class SystemPromptBuilder {
                 SYSTEM_SECTION,
                 DOING_TASKS_SECTION,
                 ACTIONS_SECTION,
-                getUsingToolsSection(enabledTools),
+//                getUsingToolsSection(enabledTools),
                 TONE_STYLE_SECTION,
-                getOutputEfficiencySection(isInternalUser()),
+//                getOutputEfficiencySection(isInternalUser()),
                 FUNCTION_RESULT_CLEARING_SECTION
         );
     }
