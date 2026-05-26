@@ -36,32 +36,53 @@ public class SessionContextCompress {
     @Resource
     private SnipService snipService;
 
+    @Resource
+    private TokenCounter tokenCounter;
+
+    @Resource
+    private MicroCompactService microCompactService;
+
     /** 工具结果预算占上下文窗口比例 */
     private static final double TOOL_RESULT_BUDGET_RATIO = 0.3;
+
+    /** MicroCompact 保护尾部消息数，清除旧工具结果 */
+    private static final int MICRO_COMPACT_PROTECTED_TAIL = 10;
 
     public void compress(List<ChatMessage> messages, String model) {
 
 //        int contextWindow = modelRegistry.getContextWindowForModel(model);
         // 模型的上下文窗口大小
         int contextWindow = 1024 * 200;
-
+        List<ChatMessage> currentMessages = messages;
 
 
         // ===== Level 0: Snip (单条工具超预算，其结果进行截断) =====
+        boolean snipExecuted = false;
+        int snipTokensFreed = 0;
         int toolResultBudget = (int) (contextWindow * TOOL_RESULT_BUDGET_RATIO);
-        List<ChatMessage> afterSnip = snipService.snipToolResults(messages, toolResultBudget);
-//        int snipBefore = tokenCounter.estimateTokens(messages);
-//        int snipAfter = tokenCounter.estimateTokens(afterSnip);
-//        if (snipAfter < snipBefore) {
-//            snipExecuted = true;
-//            snipTokensFreed = snipBefore - snipAfter;
-//            current = afterSnip;
-//            log.debug("Level 0 Snip: freed {} tokens", snipTokensFreed);
-//        }
+        List<ChatMessage> afterSnip = snipService.snipToolResults(currentMessages, toolResultBudget);
+        int snipBefore = tokenCounter.estimateTokens(currentMessages);
+        int snipAfter = tokenCounter.estimateTokens(afterSnip);
+        if (snipAfter < snipBefore) {
+            snipExecuted = true;
+            snipTokensFreed = snipBefore - snipAfter;
+            currentMessages = afterSnip;
+            log.debug("Level 0 Snip: freed {} tokens", snipTokensFreed);
+        }
 
-        // ===== Level 1: MicroCompact (旧工具结果清除) =====
-
+        // ===== Level 1: MicroCompact (旧工具结果清除)，最近的滑动窗口内工具结果不清除 =====
+        int microCompactTokensFreed = 0;
+        List<ChatMessage> afterMicroCompact
+                = microCompactService.compactMessages(currentMessages, MICRO_COMPACT_PROTECTED_TAIL);
+        int microCompactBefore = tokenCounter.estimateTokens(currentMessages);
+        int microCompactAfter = tokenCounter.estimateTokens(afterMicroCompact);
+        if (snipAfter < snipBefore) {
+            microCompactTokensFreed = microCompactBefore - microCompactAfter;
+            currentMessages = afterMicroCompact;
+            log.debug("Level 1 microCompact: freed {} tokens", microCompactTokensFreed);
+        }
 
         // ===== Level 3: AutoCompact (LLM 摘要) — 含 Collapse 互斥协调 =====
+
     }
 }

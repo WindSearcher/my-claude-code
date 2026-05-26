@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.windsearcher.domain.ChatMessage;
 import com.windsearcher.domain.ChatRequest;
 import com.windsearcher.domain.ContentBlock;
-import com.windsearcher.domain.Role;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -87,25 +86,25 @@ public final class AnthropicMessageRequestFactory {
             sb.append(request.getSystemPrompt().trim());
         }
         for (ChatMessage m : nullSafe(request.getMessages())) {
-            if (m.getRole() == Role.SYSTEM && StringUtils.hasText(m.getContent())) {
+            if (m instanceof ChatMessage.SystemMessage sys && StringUtils.hasText(sys.getContent())) {
                 if (!sb.isEmpty()) {
                     sb.append('\n');
                 }
-                sb.append(m.getContent().trim());
+                sb.append(sys.getContent().trim());
             }
         }
         return sb.toString();
     }
 
     private static JsonNode toAnthropicMessage(ObjectMapper mapper, ChatMessage m) {
-        if (m.getRole() == Role.SYSTEM) {
+        if (m instanceof ChatMessage.SystemMessage) {
             return null;
         }
-        if (m.getRole() == Role.TOOL) {
-            return toolResultMessage(mapper, m);
+        if (m instanceof ChatMessage.ToolMessage tool) {
+            return toolResultMessage(mapper, tool);
         }
         ObjectNode msg = mapper.createObjectNode();
-        msg.put("role", m.getRole() == Role.ASSISTANT ? "assistant" : "user");
+        msg.put("role", m instanceof ChatMessage.AssistantMessage ? "assistant" : "user");
 
         if (!CollectionUtils.isEmpty(m.getBlocks())) {
             ArrayNode arr = mapper.createArrayNode();
@@ -133,7 +132,7 @@ public final class AnthropicMessageRequestFactory {
         return msg;
     }
 
-    private static ObjectNode toolResultMessage(ObjectMapper mapper, ChatMessage m) {
+    private static ObjectNode toolResultMessage(ObjectMapper mapper, ChatMessage.ToolMessage m) {
         ObjectNode msg = mapper.createObjectNode();
         msg.put("role", "user");
         ArrayNode content = msg.putArray("content");

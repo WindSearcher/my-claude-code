@@ -1,10 +1,9 @@
 package com.windsearcher.engine;
 
 import com.alibaba.fastjson2.JSONObject;
-import com.windsearcher.domain.QueryConfig;
-import com.windsearcher.domain.QueryLoopState;
-import com.windsearcher.domain.QueryResult;
-import com.windsearcher.domain.TokenUsage;
+import com.windsearcher.domain.*;
+import com.windsearcher.llm.LlmProvider;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +15,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Service
 @Slf4j
 public class QueryEngine {
+
+    @Resource
+    private SessionContextCompress sessionContextCompress;
 
     /**
      * 执行agent loop循环流水线：
@@ -58,10 +60,14 @@ public class QueryEngine {
             state.incrementTurnCount();
 
             // step 1：上下文压缩
+            sessionContextCompress.compress(state.getMessages(), config.getModel());
 
             // step 2：
 
             // step 3：模型调用
+            LlmProvider provider = providerRegistry.getProvider(config.getModel());
+            log.info("[DIAG] Turn {} Step3: provider={}, effectiveModel={}, effectiveMaxTokens={}",
+                    turn, provider.getClass().getSimpleName(), effectiveModel, effectiveMaxTokens);
 
 
         }
