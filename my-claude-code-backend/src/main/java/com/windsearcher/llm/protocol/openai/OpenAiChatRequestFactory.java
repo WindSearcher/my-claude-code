@@ -5,10 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import com.windsearcher.domain.ChatMessage;
-import com.windsearcher.domain.ChatRequest;
-import com.windsearcher.domain.ContentBlock;
-import com.windsearcher.domain.Role;
+import com.windsearcher.domain.*;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -64,15 +61,15 @@ public final class OpenAiChatRequestFactory {
                 sys.put("content", m.getContent());
                 continue;
             }
-            if (m.getRole() == Role.TOOL) {
-                messages.add(toolMessage(mapper, m));
-                continue;
-            }
             if (m.getRole() == Role.ASSISTANT) {
                 JsonNode asst = assistantMessage(mapper, m);
                 if (asst != null) {
                     messages.add(asst);
                 }
+                continue;
+            }
+            if (m.getRole() == Role.TOOL) {
+                messages.add(toolMessage(mapper, m));
                 continue;
             }
             messages.add(userMessage(mapper, m));
@@ -102,102 +99,98 @@ public final class OpenAiChatRequestFactory {
     private static ObjectNode userMessage(ObjectMapper mapper, ChatMessage m) {
         ObjectNode o = mapper.createObjectNode();
         o.put("role", "user");
-        if (CollectionUtils.isEmpty(m.getBlocks())) {
-            o.put("content", m.getContent() != null ? m.getContent() : "");
-            return o;
-        }
-        boolean multimodal = m.getBlocks().stream().anyMatch(b -> "image".equals(b.getType()));
-        if (!multimodal) {
-            StringBuilder text = new StringBuilder();
-            for (ContentBlock b : m.getBlocks()) {
-                if ("text".equals(b.getType()) && b.getText() != null) {
-                    if (!text.isEmpty()) {
-                        text.append('\n');
-                    }
-                    text.append(b.getText());
-                }
-            }
-            o.put("content", text.isEmpty() && m.getContent() != null ? m.getContent() : text.toString());
-            return o;
-        }
-        ArrayNode parts = mapper.createArrayNode();
-        for (ContentBlock b : m.getBlocks()) {
-            if ("text".equals(b.getType()) && StringUtils.hasText(b.getText())) {
-                ObjectNode t = mapper.createObjectNode();
-                t.put("type", "text");
-                t.put("text", b.getText());
-                parts.add(t);
-            } else if ("image".equals(b.getType()) && StringUtils.hasText(b.getImageUrl())) {
-                ObjectNode img = mapper.createObjectNode();
-                img.put("type", "image_url");
-                ObjectNode url = mapper.createObjectNode();
-                url.put("url", b.getImageUrl());
-                img.set("image_url", url);
-                parts.add(img);
-            }
-        }
-        if (parts.isEmpty() && m.getContent() != null) {
-            ObjectNode t = mapper.createObjectNode();
-            t.put("type", "text");
-            t.put("text", m.getContent());
-            parts.add(t);
-        }
-        o.set("content", parts);
+        o.put("content", m.getContent() != null ? m.getContent() : "");
+//        if (CollectionUtils.isEmpty(m.getBlocks())) {
+//            o.put("content", m.getContent() != null ? m.getContent() : "");
+//            return o;
+//        }
+//        boolean multimodal = m.getBlocks().stream().anyMatch(b -> "image".equals(b.getType()));
+//        if (!multimodal) {
+//            StringBuilder text = new StringBuilder();
+//            for (ContentBlock b : m.getBlocks()) {
+//                if ("text".equals(b.getType()) && b.getText() != null) {
+//                    if (!text.isEmpty()) {
+//                        text.append('\n');
+//                    }
+//                    text.append(b.getText());
+//                }
+//            }
+//            o.put("content", text.isEmpty() && m.getContent() != null ? m.getContent() : text.toString());
+//            return o;
+//        }
+//        ArrayNode parts = mapper.createArrayNode();
+//        for (ContentBlock b : m.getBlocks()) {
+//            if ("text".equals(b.getType()) && StringUtils.hasText(b.getText())) {
+//                ObjectNode t = mapper.createObjectNode();
+//                t.put("type", "text");
+//                t.put("text", b.getText());
+//                parts.add(t);
+//            } else if ("image".equals(b.getType()) && StringUtils.hasText(b.getImageUrl())) {
+//                ObjectNode img = mapper.createObjectNode();
+//                img.put("type", "image_url");
+//                ObjectNode url = mapper.createObjectNode();
+//                url.put("url", b.getImageUrl());
+//                img.set("image_url", url);
+//                parts.add(img);
+//            }
+//        }
+//        if (parts.isEmpty() && m.getContent() != null) {
+//            ObjectNode t = mapper.createObjectNode();
+//            t.put("type", "text");
+//            t.put("text", m.getContent());
+//            parts.add(t);
+//        }
+//        o.set("content", parts);
         return o;
     }
 
     private static JsonNode assistantMessage(ObjectMapper mapper, ChatMessage m) {
-        if (CollectionUtils.isEmpty(m.getBlocks())) {
+        if (CollectionUtils.isEmpty(m.getToolCalls())) {
             ObjectNode o = mapper.createObjectNode();
             o.put("role", "assistant");
             o.put("content", m.getContent() != null ? m.getContent() : "");
             return o;
         }
-        boolean hasToolUse = m.getBlocks().stream().anyMatch(b -> "tool_use".equals(b.getType()));
-        StringBuilder text = new StringBuilder();
-        StringBuilder thinking = new StringBuilder();
-        for (ContentBlock b : m.getBlocks()) {
-            if ("text".equals(b.getType()) && b.getText() != null) {
-                if (!text.isEmpty()) {
-                    text.append('\n');
-                }
-                text.append(b.getText());
-            } else if ("thinking".equals(b.getType()) && b.getText() != null) {
-                thinking.append(b.getText());
-            }
-        }
+        boolean hasToolUse = m.getToolCalls() != null && m.getToolCalls().size() > 0;
+//        StringBuilder text = new StringBuilder();
+//        StringBuilder thinking = new StringBuilder();
+//
+//        text.append(m.getContent());
+//        thinking.append(m.getReasoningContent());
+//
+//        for (ContentBlock b : m.getBlocks()) {
+//            if ("text".equals(b.getType()) && b.getText() != null) {
+//                if (!text.isEmpty()) {
+//                    text.append('\n');
+//                }
+//                text.append(b.getText());
+//            } else if ("thinking".equals(b.getType()) && b.getText() != null) {
+//                thinking.append(b.getText());
+//            }
+//        }
+
         ObjectNode o = mapper.createObjectNode();
         o.put("role", "assistant");
         if (hasToolUse) {
-            if (!text.isEmpty()) {
-                o.put("content", text.toString());
-            } else {
-                o.putNull("content");
-            }
-            if (!thinking.isEmpty()) {
-                o.put("reasoning_content", thinking.toString());
-            }
+            o.put("content", m.getContent() != null ? m.getContent() : "");
+            o.put("reasoning_content", m.getReasoningContent() != null ? m.getReasoningContent() : "");
+
             ArrayNode toolCalls = o.putArray("tool_calls");
-            for (ContentBlock b : m.getBlocks()) {
-                if (!"tool_use".equals(b.getType())) {
-                    continue;
-                }
+            for (ToolCall b : m.getToolCalls()) {
                 ObjectNode tc = toolCalls.addObject();
-                tc.put("id", b.getToolUseId() != null ? b.getToolUseId() : "");
+                tc.put("id", b.getToolCallId() != null ? b.getToolCallId() : "");
                 tc.put("type", "function");
                 ObjectNode fn = tc.putObject("function");
                 fn.put("name", b.getToolName() != null ? b.getToolName() : "");
-                String args = "{}";
-                if (StringUtils.hasText(b.getToolInput())) {
-                    args = b.getToolInput();
-                }
-                fn.put("arguments", args);
+//                String args = "{}";
+//                if (StringUtils.hasText(b.getToolInput())) {
+//                    args = b.getToolInput();
+//                }
+                fn.put("arguments", b.getArgumentsRaw());
             }
         } else {
-            o.put("content", text.isEmpty() ? (m.getContent() != null ? m.getContent() : "") : text.toString());
-            if (!thinking.isEmpty()) {
-                o.put("reasoning_content", thinking.toString());
-            }
+            o.put("content", m.getContent() != null ? m.getContent() : "");
+            o.put("reasoning_content", m.getReasoningContent() != null ? m.getReasoningContent() : "");
         }
         return o;
     }
@@ -206,17 +199,17 @@ public final class OpenAiChatRequestFactory {
         ObjectNode o = mapper.createObjectNode();
         o.put("role", "tool");
         o.put("tool_call_id", m.getToolCallId() != null ? m.getToolCallId() : "");
-        String content = m.getContent() != null ? m.getContent() : "";
-        if (!CollectionUtils.isEmpty(m.getBlocks())) {
-            ContentBlock b = m.getBlocks().get(0);
-            if (b.getToolResult() != null) {
-                content = b.getToolResult();
-            }
-        }
+        String content = m.getToolResult() != null ? m.getToolResult() : "";
+//        if (!CollectionUtils.isEmpty(m.getBlocks())) {
+//            ContentBlock b = m.getBlocks().get(0);
+//            if (b.getToolResult() != null) {
+//                content = b.getToolResult();
+//            }
+//        }
         o.put("content", content);
-        if (StringUtils.hasText(m.getToolName())) {
-            o.put("name", m.getToolName());
-        }
+//        if (StringUtils.hasText(m.getToolName())) {
+//            o.put("name", m.getToolName());
+//        }
         return o;
     }
 

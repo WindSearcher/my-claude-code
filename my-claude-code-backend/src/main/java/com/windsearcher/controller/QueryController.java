@@ -7,8 +7,10 @@ import com.windsearcher.prompt.SystemPromptBuilder;
 import com.windsearcher.prompt.SystemPromptConfig;
 import com.windsearcher.tool.BaseTool;
 import com.windsearcher.tool.ToolRegistry;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,6 +34,7 @@ import java.util.Set;
  */
 @RestController
 @RequestMapping("/api/query")
+@Tag(name = "Query", description = "LLM query and conversation APIs")
 public class QueryController {
 
 
@@ -52,7 +55,8 @@ public class QueryController {
      * 权限策略: 默认 DONT_ASK (非交互场景)。
      */
     @PostMapping
-    public ResponseEntity<QueryResponse> query(@RequestBody QueryRequest request) {
+    @Operation(summary = "同步单次查询", description = "阻塞执行一次 LLM 查询，返回完整结果。")
+    public ResponseEntity<QueryResponse> syncQuery(@RequestBody QueryRequest request) {
 
         // 1.加载会话数据，把同一个会话的数据获取到
         SessionContext sessionContext = null;
@@ -71,9 +75,9 @@ public class QueryController {
 
         // 5.获取用户历史消息
         List<ChatMessage> historyMessages = new ArrayList<>();
-        if (StringUtils.isNotEmpty(request.getSessionId())) {
-            // 加载用户历史消息
-        }
+//        if (StringUtils.isNotEmpty(request.getSessionId())) {
+//            // 加载用户历史消息
+//        }
 
         // 6. 构建 QueryConfig（★ 别名解析: light→qwen-plus, standard→qwen3.6-plus, premium→qwen3.7-max）
 //        String rawModel = request.model();

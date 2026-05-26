@@ -6,7 +6,7 @@ import com.windsearcher.service.GitService;
 import com.windsearcher.tool.BaseTool;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
+//import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -64,8 +64,8 @@ public class SystemPromptBuilder {
         String basePrompt = resolveBasePrompt(config, tools, model, cwd);
         String appendPrompt = config.getAppendSystemPrompt();
 
-        if (StringUtils.isNotEmpty(appendPrompt)
-                && config.getOverrideSystemPrompt() == null) {
+        if (appendPrompt != null &&
+                 config.getOverrideSystemPrompt() == null) {
             return basePrompt + "\n\n" + appendPrompt;
         }
 

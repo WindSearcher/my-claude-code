@@ -68,8 +68,12 @@ public class QueryEngine {
 
             // step 2：
 
-            // step 3：模型调用
+            // step 3：获取具体的模型调用商
             LlmProvider provider = providerRegistry.getProvider(config.getModel());
+
+            // step 4：构建ChatRequest并发起流式请求
+            ChatRequest chatRequest = new ChatRequest();
+            ChatResponse chatResponse = provider.streamChat(chatRequest);
 
 
         }

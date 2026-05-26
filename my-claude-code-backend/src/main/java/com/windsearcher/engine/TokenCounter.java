@@ -170,15 +170,15 @@ public class TokenCounter {
      * 估算单条消息的字符数。
      */
     private int estimateMessageChars(ChatMessage message) {
-        if (Role.USER.getType().equals(message.getRole().getType())) {
-            return textAndBlocksLength(message.getContent(), message.getBlocks());
-        } else if (Role.ASSISTANT.getType().equals(message.getRole().getType())) {
-            return textAndBlocksLength(message.getContent(), message.getBlocks());
-        } else if (Role.SYSTEM.getType().equals(message.getRole().getType())) {
-            return lengthOf(message.getContent());
-        } else if (Role.TOOL.getType().equals(message.getRole().getType())) {
-            return textAndBlocksLength(message.getContent(), message.getBlocks());
-        }
+//        if (Role.USER.getType().equals(message.getRole().getType())) {
+//            return textAndBlocksLength(message.getContent(), message.getBlocks());
+//        } else if (Role.ASSISTANT.getType().equals(message.getRole().getType())) {
+//            return textAndBlocksLength(message.getContent(), message.getBlocks());
+//        } else if (Role.SYSTEM.getType().equals(message.getRole().getType())) {
+//            return lengthOf(message.getContent());
+//        } else if (Role.TOOL.getType().equals(message.getRole().getType())) {
+//            return textAndBlocksLength(message.getContent(), message.getBlocks());
+//        }
 
         return 0;
     }

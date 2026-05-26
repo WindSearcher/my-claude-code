@@ -19,10 +19,12 @@ public class ToolCall {
      */
     private String toolCallId;
 
-    private String name;
+    private String toolName;
 
     private JsonNode arguments;
 
     private String argumentsRaw;
+
+    private String toolResult;
 
 }
