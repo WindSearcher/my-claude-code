@@ -30,4 +30,7 @@ public class QueryRequest {
 
     private String sessionId;
 
+    private Integer maxTurns;
+
+    private String workingDirectory;
 }
