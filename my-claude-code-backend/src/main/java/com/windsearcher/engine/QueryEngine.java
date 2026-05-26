@@ -3,6 +3,7 @@ package com.windsearcher.engine;
 import com.alibaba.fastjson2.JSONObject;
 import com.windsearcher.domain.*;
 import com.windsearcher.llm.LlmProvider;
+import com.windsearcher.llm.LlmProviderRegistry;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,9 @@ public class QueryEngine {
 
     @Resource
     private SessionContextCompress sessionContextCompress;
+
+    @Resource
+    private LlmProviderRegistry providerRegistry;
 
     /**
      * 执行agent loop循环流水线：
@@ -66,8 +70,6 @@ public class QueryEngine {
 
             // step 3：模型调用
             LlmProvider provider = providerRegistry.getProvider(config.getModel());
-            log.info("[DIAG] Turn {} Step3: provider={}, effectiveModel={}, effectiveMaxTokens={}",
-                    turn, provider.getClass().getSimpleName(), effectiveModel, effectiveMaxTokens);
 
 
         }

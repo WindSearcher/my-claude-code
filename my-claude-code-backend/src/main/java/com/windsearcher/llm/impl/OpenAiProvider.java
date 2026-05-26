@@ -325,7 +325,7 @@ public class OpenAiProvider implements LlmProvider {
             String name = fn.path("name").asText("");
             String argsRaw = fn.path("arguments").asText("{}");
             out.add(ToolCall.builder()
-                    .id(id)
+                    .toolCallId(id)
                     .name(name)
                     .argumentsRaw(argsRaw)
                     .arguments(parseArgumentsNode(argsRaw))
@@ -527,7 +527,7 @@ public class OpenAiProvider implements LlmProvider {
                     }
                 }
                 list.add(ToolCall.builder()
-                        .id(s.id)
+                        .toolCallId(s.id)
                         .name(s.name != null ? s.name : "")
                         .argumentsRaw(raw.isEmpty() ? "{}" : raw)
                         .arguments(argsNode)

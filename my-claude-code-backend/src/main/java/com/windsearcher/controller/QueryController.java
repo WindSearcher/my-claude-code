@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * QueryController — 查询 API (CLI/SDK 专用)。
@@ -107,6 +108,18 @@ public class QueryController {
     }
 
     private List<BaseTool> assembleToolPool(QueryRequest request) {
+        List<BaseTool> tools = toolRegistry.getEnabledTools();
+        List<String> disallowedTools = request.getDisallowedTools();
+        List<String> allowedTools = request.getAllowedTools();
 
+        if (allowedTools != null && !allowedTools.isEmpty()) {
+            Set<String> allowed = Set.copyOf(allowedTools);
+            tools = tools.stream().filter(t -> allowed.contains(t.getName())).toList();
+        }
+        if (disallowedTools != null && !disallowedTools.isEmpty()) {
+            Set<String> denied = Set.copyOf(disallowedTools);
+            tools = tools.stream().filter(t -> !denied.contains(t.getName())).toList();
+        }
+        return tools;
     }
 }

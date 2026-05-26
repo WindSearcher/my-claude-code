@@ -22,9 +22,16 @@ public class ChatMessage {
      */
     private Instant timestamp;
 
+    /**
+     * 消息角色
+     */
     private Role role;
     private String content;
     private List<ContentBlock> blocks;
+
+    /**
+     * toolCalls，assistant消息才有工具调用结果
+     */
     private List<ToolCall> toolCalls;
     private String toolCallId;
     private String toolName;

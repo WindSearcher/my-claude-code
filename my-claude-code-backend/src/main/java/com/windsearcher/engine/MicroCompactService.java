@@ -47,23 +47,23 @@ public class MicroCompactService {
                 continue;
             }
 
-            if (msg instanceof Message.UserMessage user
-                    && user.toolUseResult() != null
-                    && !user.toolUseResult().equals(CLEARED_MESSAGE)) {
-                // 检查是否属于可压缩工具 — 通过预扫描的 ID 集合判断
-                boolean isCompactable = isCompactableByIds(user, compactableIds, messages);
-                if (isCompactable) {
-                    tokensFreed += tokenCounter.estimateTokens(user.toolUseResult());
-                    result.add(new Message.UserMessage(
-                            user.uuid(), user.timestamp(), user.content(),
-                            CLEARED_MESSAGE, user.sourceToolAssistantUUID()));
-                    clearedCount++;
-                } else {
-                    result.add(msg);
-                }
-            } else {
-                result.add(msg);
-            }
+//            if (msg instanceof Message.UserMessage user
+//                    && user.toolUseResult() != null
+//                    && !user.toolUseResult().equals(CLEARED_MESSAGE)) {
+//                // 检查是否属于可压缩工具 — 通过预扫描的 ID 集合判断
+//                boolean isCompactable = isCompactableByIds(user, compactableIds, messages);
+//                if (isCompactable) {
+//                    tokensFreed += tokenCounter.estimateTokens(user.toolUseResult());
+//                    result.add(new Message.UserMessage(
+//                            user.uuid(), user.timestamp(), user.content(),
+//                            CLEARED_MESSAGE, user.sourceToolAssistantUUID()));
+//                    clearedCount++;
+//                } else {
+//                    result.add(msg);
+//                }
+//            } else {
+//                result.add(msg);
+//            }
         }
 
         if (tokensFreed > 0) {

@@ -17,7 +17,7 @@ public class ToolCall {
     /**
      * 调用ID
      */
-    private String id;
+    private String toolCallId;
 
     private String name;
 

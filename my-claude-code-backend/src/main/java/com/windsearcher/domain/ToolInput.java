@@ -2,6 +2,7 @@ package com.windsearcher.domain;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.windsearcher.tool.ToolInputValidationException;
 
 import java.util.List;
 import java.util.Map;
