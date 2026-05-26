@@ -135,7 +135,7 @@ public class AnthropicProvider implements LlmProvider {
             JsonNode input = block.get("input");
             String raw = input != null ? input.toString() : "{}";
             list.add(ToolCall.builder()
-                    .id(block.path("id").asText(""))
+                    .toolCallId(block.path("id").asText(""))
                     .name(block.path("name").asText(""))
                     .arguments(input)
                     .argumentsRaw(raw)
@@ -305,7 +305,7 @@ public class AnthropicProvider implements LlmProvider {
                     }
                 }
                 toolCalls.add(ToolCall.builder()
-                        .id(s.id)
+                        .toolCallId(s.id)
                         .name(s.name != null ? s.name : "")
                         .argumentsRaw(raw.isEmpty() ? "{}" : raw)
                         .arguments(argsNode)

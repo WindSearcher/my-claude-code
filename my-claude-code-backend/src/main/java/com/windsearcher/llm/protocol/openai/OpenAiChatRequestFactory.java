@@ -60,7 +60,7 @@ public final class OpenAiChatRequestFactory {
         for (ChatMessage m : list) {
             if (m.getRole() == Role.USER) {
                 ObjectNode sys = messages.addObject();
-                sys.put("role", m.getRole().getDesc());
+                sys.put("role", m.getRole().getType());
                 sys.put("content", m.getContent());
                 continue;
             }
