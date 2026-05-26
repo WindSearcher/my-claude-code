@@ -1,7 +1,7 @@
 package com.windsearcher.prompt;
 
 import com.windsearcher.domain.ChatMessage;
-import com.windsearcher.service.ConfigService;
+//import com.windsearcher.service.ConfigService;
 import com.windsearcher.service.GitService;
 import com.windsearcher.tool.BaseTool;
 import jakarta.annotation.Resource;
@@ -29,8 +29,8 @@ public class SystemPromptBuilder {
     @Resource
     private GitService gitService;
 
-    @Resource
-    private ConfigService configService;
+//    @Resource
+//    private ConfigService configService;
 
     @Resource
     private SystemPromptSectionCache promptSectionCache;
@@ -794,10 +794,10 @@ public class SystemPromptBuilder {
     private String getLanguageSection() {
         String language = null;
         try {
-            var userConfig = configService.getUserConfig();
-            if (userConfig != null) {
-                language = userConfig.locale();
-            }
+//            var userConfig = configService.getUserConfig();
+//            if (userConfig != null) {
+//                language = userConfig.locale();
+//            }
         } catch (Exception e) {
             // fallback to system property
         }

@@ -14,14 +14,14 @@ public enum Role {
     /** 工具结果（OpenAI 为 tool；Anthropic 常以 user + tool_result 块表达） */
     TOOL("tool");
 
-    private final String desc;
+    private final String type;
 
-    Role(String desc) {
-        this.desc = desc;
+    Role(String type) {
+        this.type = type;
     }
 
     @JsonValue
-    public String getDesc() {
-        return desc;
+    public String getType() {
+        return type;
     }
 }

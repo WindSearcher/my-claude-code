@@ -86,25 +86,15 @@ public final class AnthropicMessageRequestFactory {
             sb.append(request.getSystemPrompt().trim());
         }
         for (ChatMessage m : nullSafe(request.getMessages())) {
-            if (m instanceof ChatMessage.SystemMessage sys && StringUtils.hasText(sys.getContent())) {
-                if (!sb.isEmpty()) {
-                    sb.append('\n');
-                }
-                sb.append(sys.getContent().trim());
-            }
+            sb.append(m.getContent().trim());
         }
         return sb.toString();
     }
 
     private static JsonNode toAnthropicMessage(ObjectMapper mapper, ChatMessage m) {
-        if (m instanceof ChatMessage.SystemMessage) {
-            return null;
-        }
-        if (m instanceof ChatMessage.ToolMessage tool) {
-            return toolResultMessage(mapper, tool);
-        }
+
         ObjectNode msg = mapper.createObjectNode();
-        msg.put("role", m instanceof ChatMessage.AssistantMessage ? "assistant" : "user");
+        msg.put("role", m instanceof ChatMessage ? "assistant" : "user");
 
         if (!CollectionUtils.isEmpty(m.getBlocks())) {
             ArrayNode arr = mapper.createArrayNode();
@@ -132,7 +122,7 @@ public final class AnthropicMessageRequestFactory {
         return msg;
     }
 
-    private static ObjectNode toolResultMessage(ObjectMapper mapper, ChatMessage.ToolMessage m) {
+    private static ObjectNode toolResultMessage(ObjectMapper mapper, ChatMessage m) {
         ObjectNode msg = mapper.createObjectNode();
         msg.put("role", "user");
         ArrayNode content = msg.putArray("content");

@@ -17,6 +17,7 @@ import java.util.Map;
 
 /**
  * 构建 OpenAI Chat Completions 兼容请求体（含工具、多模态 user 内容、assistant tool_calls / reasoning_content）。
+ *
  */
 public final class OpenAiChatRequestFactory {
 
@@ -24,17 +25,22 @@ public final class OpenAiChatRequestFactory {
     }
 
     public static ObjectNode build(ObjectMapper mapper, ChatRequest request) {
+        // 1.模型名称
         ObjectNode root = mapper.createObjectNode();
         root.put("model", request.getModel());
         if (request.getMaxTokens() != null) {
             root.put("max_tokens", request.getMaxTokens());
         }
+
+        // 2.是否流式输出
         root.put("stream", request.isStream());
         if (request.isStream()) {
             ObjectNode streamOpts = mapper.createObjectNode();
             streamOpts.put("include_usage", true);
             root.set("stream_options", streamOpts);
         }
+
+        // 3.温度系数
         if (request.getTemperature() != null) {
             root.put("temperature", request.getTemperature());
         }
@@ -42,6 +48,7 @@ public final class OpenAiChatRequestFactory {
             root.put("top_p", request.getTopP());
         }
 
+        // 4.转换消息列表 — Anthropic 内部格式 → OpenAI Chat Completions 格式
         ArrayNode messages = root.putArray("messages");
         if (StringUtils.hasText(request.getSystemPrompt())) {
             ObjectNode sys = messages.addObject();
